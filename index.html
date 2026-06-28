@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>玉成國小地下停車場 充電樁狀態</title><style>
+:root{--bg:#0f1115;--card:#1b1f27;--txt:#e8eaed;--sub:#9aa0aa;--good:#2ecc71;--bad:#e74c3c;--accent:#4da3ff;--line:#2a2f3a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;display:flex;justify-content:center;padding:24px 14px;min-height:100vh}
+.card{width:100%;max-width:460px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;margin:0 0 18px}
+.big{display:flex;align-items:baseline;gap:8px;margin:6px 0 4px}.big .num{font-size:3.4rem;font-weight:700;line-height:1;color:var(--good)}.big .num.zero{color:var(--bad)}.big .of{font-size:1rem;color:var(--sub)}
+.label{color:var(--sub);font-size:.82rem;margin-bottom:16px}
+.dots{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 18px}.dot{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:600;color:#fff}.dot.good{background:var(--good)}.dot.bad{background:var(--bad)}
+.meta{border-top:1px solid var(--line);padding-top:14px;font-size:.84rem}.meta div{display:flex;justify-content:space-between;padding:5px 0;gap:12px}.meta .k{color:var(--sub)}.meta .v{text-align:right}.meta a{color:var(--accent);text-decoration:none}
+.bar{display:flex;gap:10px;margin-top:16px}button{flex:1;border:0;border-radius:10px;padding:11px;font-size:.9rem;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}button:disabled{opacity:.5}
+.ts{text-align:center;color:var(--sub);font-size:.74rem;margin-top:12px;line-height:1.5;white-space:pre-line}.err{color:var(--bad);font-size:.82rem;text-align:center;margin-top:10px;display:none}
+</style></head><body><div class="card">
+<h1>玉成國小地下停車場</h1>
+<p class="addr">台北市南港區昆陽街 23 號 B1–B2　·　充電樁 6 座</p>
+<div class="big"><span class="num" id="avail">–</span><span class="of">可用 / 共 <b id="total">6</b> 座</span></div>
+<div class="label" id="statusLabel">載入中…</div>
+<div class="dots" id="dots"></div>
+<div class="meta">
+<div><span class="k">停車費率</span><span class="v" id="parkFee">每0.5小時10元</span></div>
+<div><span class="k">充電費率</span><span class="v" id="chgFee">計時/每日/5元每0.5時</span></div>
+<div><span class="k">電話</span><span class="v"><a href="tel:0226550818">02-2655-0818</a></span></div>
+<div><span class="k">地圖</span><span class="v"><a href="https://www.google.com/maps?q=25.05329,121.59294" target="_blank">Google 地圖 ↗</a></span></div>
+</div>
+<div class="bar"><button id="refresh" onclick="load()">重新整理</button></div>
+<div class="ts" id="ts"></div><div class="err" id="err"></div>
+</div><script>
+async function load(){
+ const b=document.getElementById('refresh'),e=document.getElementById('err');
+ b.disabled=true;e.style.display='none';b.textContent='載入中…';
+ try{
+  const d=await (await fetch('status.json?t='+Date.now(),{cache:'no-store'})).json();
+  document.getElementById('avail').textContent=d.live?d.good:'–';
+  document.getElementById('avail').className='num'+(d.live&&d.good===0?' zero':'');
+  document.getElementById('total').textContent=d.total||6;
+  document.getElementById('statusLabel').textContent=
+    !d.live?'此刻來源無即時資料':(d.good>0?('目前有 '+d.good+' 座可充電（來源：'+d.source+'）'):'目前全部使用中');
+  if(d.parkFee)document.getElementById('parkFee').textContent=d.parkFee;
+  if(d.chgFee)document.getElementById('chgFee').textContent=d.chgFee;
+  const box=document.getElementById('dots');box.innerHTML='';
+  if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
+   for(let i=0;i<d.bad;i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');}
+  document.getElementById('ts').textContent='資料時間：'+d.updated+'\\n（每 5 分鐘自動更新）';
+ }catch(err){e.style.display='block';e.textContent='讀取失敗：'+err.message;}
+ finally{b.disabled=false;b.textContent='重新整理';}
+}
+load();
+</script></body></html>
