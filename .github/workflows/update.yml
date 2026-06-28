@@ -1,0 +1,48 @@
+name: update-status
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: update-status
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch and parse
+        run: |
+          python3 - <<'PY'
+          import urllib.request, ssl, re, json, datetime
+          SRC = "https://www.opendata.vip/tdx/evParking/Taipei"
+          NAMES = ["玉成國小地下停車場", "玉成國小站"]
+          ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+          req = urllib.request.Request(SRC, headers={"User-Agent":"Mozilla/5.0"})
+          html = urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore")
+          def row_for(name):
+              for m in re.finditer(re.escape(name), html):
+                  if "<td" in html[max(0,m.start()-20):m.start()]:
+                      return html[html.rfind("<tr",0,m.start()):html.find("</tr>",m.start())]
+              return None
+          rows = [(n, row_for(n)) for n in NAMES]; rows = [(n,r) for n,r in rows if r]
+          if not rows: raise SystemExit("not found")
+          live = max(rows, key=lambda nr: nr[1].count("air_good")+nr[1].count("air_bad"))
+          good, bad = live[1].count("air_good"), live[1].count("air_bad")
+          fee_row = next((r for n,r in rows if "停車場" in n), live[1])
+          tds = [re.sub(r"<[^>]+>","",c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", fee_row, re.S)]
+          tz = datetime.timezone(datetime.timedelta(hours=8))
+          data = {"good":good,"bad":bad,"total":good+bad,"live":good+bad>0,"source":live[0],
+            "parkFee":tds[1] if len(tds)>1 else "","chgFee":tds[3] if len(tds)>3 else "",
+            "updated":datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")}
+          open("status.json","w",encoding="utf-8").write(json.dumps(data,ensure_ascii=False))
+          print(data)
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add status.json
+          git diff --staged --quiet || (git commit -m "update status" && git push)
