@@ -41,7 +41,8 @@ async function load(){
   const box=document.getElementById('dots');box.innerHTML='';
   if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
    for(let i=0;i<d.bad;i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');}
-  document.getElementById('ts').textContent='資料時間：'+d.updated+'\\n（每 5 分鐘自動更新）';
+  document.getElementById('ts').textContent='資料時間：'+d.updated
+    +(d.stale_feed?'\\n⚠ 主要資料源暫無回應，此為備援充電站資料（可能滯後數小時）':'\\n（每 5 分鐘自動更新）');
  }catch(err){e.style.display='block';e.textContent='讀取失敗：'+err.message;}
  finally{b.disabled=false;b.textContent='重新整理';}
 }

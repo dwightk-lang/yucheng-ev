@@ -1,8 +1,8 @@
 name: update-status
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *'   # 每 5 分鐘（GitHub cron 最短間隔）
+  workflow_dispatch:          # 也可在 Actions 頁手動執行
 permissions:
   contents: write
 concurrency:
@@ -13,34 +13,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: fetch and parse
+      - name: 抓取並解析 opendata.vip
         run: |
           python3 - <<'PY'
-          import urllib.request, ssl, re, json, datetime
+          import urllib.request, ssl, re, json, datetime, time
           SRC = "https://www.opendata.vip/tdx/evParking/Taipei"
-          NAMES = ["玉成國小地下停車場", "玉成國小站"]
+          PRIMARY, BACKUP = "玉成國小地下停車場", "玉成國小站"
           ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
-          req = urllib.request.Request(SRC, headers={"User-Agent":"Mozilla/5.0"})
-          html = urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore")
-          def row_for(name):
+          def fetch():
+              req = urllib.request.Request(SRC, headers={"User-Agent":"Mozilla/5.0"})
+              return urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore")
+          def row_for(html, name):
               for m in re.finditer(re.escape(name), html):
                   if "<td" in html[max(0,m.start()-20):m.start()]:
                       return html[html.rfind("<tr",0,m.start()):html.find("</tr>",m.start())]
               return None
-          rows = [(n, row_for(n)) for n in NAMES]; rows = [(n,r) for n,r in rows if r]
-          if not rows: raise SystemExit("not found")
-          live = max(rows, key=lambda nr: nr[1].count("air_good")+nr[1].count("air_bad"))
-          good, bad = live[1].count("air_good"), live[1].count("air_bad")
-          fee_row = next((r for n,r in rows if "停車場" in n), live[1])
+          def icons(row):
+              return (row.count("air_good"), row.count("air_bad")) if row else (0, 0)
+          # 兩筆 feed 每次載入只有一筆帶即時圖示,且「停車場」feed 較新鮮:
+          # 重試直到抓到停車場那筆有圖示,備援才用「玉成國小站」(充電站 feed,會滯後數小時)
+          live = backup = fee_row = None
+          for attempt in range(6):
+              if attempt: time.sleep(5)
+              html = fetch()
+              p, b = row_for(html, PRIMARY), row_for(html, BACKUP)
+              if p: fee_row = p
+              if sum(icons(p)):
+                  live = (PRIMARY, p); break
+              if b and sum(icons(b)):
+                  backup = (BACKUP, b)
+          live = live or backup
+          if not live: raise SystemExit("找不到玉成國小即時資料")
+          good, bad = icons(live[1])
+          fee_row = fee_row or live[1]
           tds = [re.sub(r"<[^>]+>","",c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", fee_row, re.S)]
           tz = datetime.timezone(datetime.timedelta(hours=8))
-          data = {"good":good,"bad":bad,"total":good+bad,"live":good+bad>0,"source":live[0],
-            "parkFee":tds[1] if len(tds)>1 else "","chgFee":tds[3] if len(tds)>3 else "",
-            "updated":datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")}
+          data = {
+            "good":good, "bad":bad, "total":good+bad,
+            "live":good+bad>0, "source":live[0],
+            "stale_feed":live[0]!=PRIMARY,
+            "parkFee":tds[1] if len(tds)>1 else "",
+            "chgFee":tds[3] if len(tds)>3 else "",
+            "updated":datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
+          }
           open("status.json","w",encoding="utf-8").write(json.dumps(data,ensure_ascii=False))
           print(data)
           PY
-      - name: commit
+      - name: 提交更新
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
