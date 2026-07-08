@@ -26,11 +26,23 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 <div class="bar"><button id="refresh" onclick="load()">重新整理</button></div>
 <div class="ts" id="ts"></div><div class="err" id="err"></div>
 </div><script>
+const WORKER='https://yucheng-ev.borch1004.workers.dev/api/status';
+async function fetchWorker(){
+ const c=new AbortController(),t=setTimeout(()=>c.abort(),4000);
+ try{
+  const r=await fetch(WORKER,{cache:'no-store',signal:c.signal});
+  if(!r.ok)throw new Error('worker http '+r.status);
+  const d=await r.json();if(d.error)throw new Error(d.error);
+  d._rt=true;return d;
+ }finally{clearTimeout(t);}
+}
 async function load(quiet){
  const b=document.getElementById('refresh'),e=document.getElementById('err');
  if(!quiet){b.disabled=true;e.style.display='none';b.textContent='載入中…';}
  try{
-  const d=await (await fetch('status.json?t='+Date.now(),{cache:'no-store'})).json();
+  let d;
+  try{d=await fetchWorker();}
+  catch(_){d=await (await fetch('status.json?t='+Date.now(),{cache:'no-store'})).json();}
   document.getElementById('avail').textContent=d.live?d.good:'–';
   document.getElementById('avail').className='num'+(d.live&&d.good===0?' zero':'');
   document.getElementById('total').textContent=d.total||6;
@@ -41,8 +53,12 @@ async function load(quiet){
   const box=document.getElementById('dots');box.innerHTML='';
   if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
    for(let i=0;i<d.bad;i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');}
-  document.getElementById('ts').textContent='資料時間：'+d.updated
-    +(d.stale_feed?'\n⚠ 主要資料源暫無回應，此為備援充電站資料（可能滯後數小時）':'\n（頁面每 10 秒重新整理，資料源每 5 分鐘更新）');
+  document.getElementById('ts').textContent=d._rt
+    ?('即時查詢：'+new Date().toLocaleString('zh-TW',{hour12:false})
+      +'\n（頁面每 10 秒重新整理，資料源即時）'
+      +(d.source&&d.source.indexOf('停車場')<0?'\n⚠ 即時來源為充電站feed，可能略有滯後':''))
+    :('資料時間：'+d.updated
+      +(d.stale_feed?'\n⚠ 主要資料源暫無回應，此為備援充電站資料（可能滯後數小時）':'\n（公司網路備援模式：資料源每 5 分鐘更新）'));
  }catch(err){if(!quiet){e.style.display='block';e.textContent='讀取失敗：'+err.message;}}
  finally{if(!quiet){b.disabled=false;b.textContent='重新整理';}}
 }
