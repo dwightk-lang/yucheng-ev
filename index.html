@@ -26,9 +26,9 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 <div class="bar"><button id="refresh" onclick="load()">重新整理</button></div>
 <div class="ts" id="ts"></div><div class="err" id="err"></div>
 </div><script>
-async function load(){
+async function load(quiet){
  const b=document.getElementById('refresh'),e=document.getElementById('err');
- b.disabled=true;e.style.display='none';b.textContent='載入中…';
+ if(!quiet){b.disabled=true;e.style.display='none';b.textContent='載入中…';}
  try{
   const d=await (await fetch('status.json?t='+Date.now(),{cache:'no-store'})).json();
   document.getElementById('avail').textContent=d.live?d.good:'–';
@@ -42,9 +42,10 @@ async function load(){
   if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
    for(let i=0;i<d.bad;i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');}
   document.getElementById('ts').textContent='資料時間：'+d.updated
-    +(d.stale_feed?'\\n⚠ 主要資料源暫無回應，此為備援充電站資料（可能滯後數小時）':'\\n（每 5 分鐘自動更新）');
- }catch(err){e.style.display='block';e.textContent='讀取失敗：'+err.message;}
- finally{b.disabled=false;b.textContent='重新整理';}
+    +(d.stale_feed?'\n⚠ 主要資料源暫無回應，此為備援充電站資料（可能滯後數小時）':'\n（頁面每 10 秒重新整理，資料源每 5 分鐘更新）');
+ }catch(err){if(!quiet){e.style.display='block';e.textContent='讀取失敗：'+err.message;}}
+ finally{if(!quiet){b.disabled=false;b.textContent='重新整理';}}
 }
 load();
+setInterval(()=>load(true),10000);
 </script></body></html>
