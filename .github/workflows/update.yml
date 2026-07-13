@@ -50,7 +50,8 @@ jobs:
           # 一般汽車/機車車位:台北市停管處 TCMSV 官方 feed (玉成國小 = TPE0722)
           # availablecar 為 -9 時代表該場站無即時資料,由前端顯示「無資料」
           CAR_ID = "TPE0722"
-          car = {"carTotal":None, "carAvail":None, "motorTotal":None, "motorAvail":None}
+          car = {"carTotal":None, "carAvail":None, "motorTotal":None, "motorAvail":None,
+                 "hcAvail":None, "pgAvail":None, "hmAvail":None}
           def get_json(url):
               req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
               return json.loads(urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore"))
@@ -60,7 +61,11 @@ jobs:
               if p: car["carTotal"], car["motorTotal"] = p.get("totalcar"), p.get("totalmotor")
               avail = get_json("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json")
               a = next((x for x in avail["data"]["park"] if x.get("id")==CAR_ID), None)
-              if a: car["carAvail"], car["motorAvail"] = a.get("availablecar"), a.get("availablemotor")
+              if a:
+                  car["carAvail"], car["motorAvail"] = a.get("availablecar"), a.get("availablemotor")
+                  car["hcAvail"] = a.get("availablehandicap")
+                  car["pgAvail"] = a.get("availablepregnancy")
+                  car["hmAvail"] = a.get("availableheavymotor")
           except Exception as e:
               print("TCMSV fetch failed (車位欄位維持 null):", e)
           tz = datetime.timezone(datetime.timedelta(hours=8))

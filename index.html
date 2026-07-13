@@ -20,8 +20,13 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 <div class="meta">
 <div><span class="k">汽車位</span><span class="v" id="carSpots">–</span></div>
 <div><span class="k">機車位</span><span class="v" id="motorSpots">–</span></div>
-<div><span class="k">停車費率</span><span class="v" id="parkFee">每0.5小時10元</span></div>
+<div><span class="k">身障車位</span><span class="v" id="hcSpots">–</span></div>
+<div><span class="k">孕婦親子</span><span class="v" id="pgSpots">–</span></div>
+<div><span class="k">大型重機</span><span class="v" id="hmSpots">–</span></div>
+<div><span class="k">停車費率</span><span class="v" id="parkFee">30元/時(08–18)、20元/時(18–08)，半小時計</span></div>
+<div><span class="k">月租</span><span class="v">全日2,500・日間2,000（機車300）</span></div>
 <div><span class="k">充電費率</span><span class="v" id="chgFee">計時/每日/5元每0.5時</span></div>
+<div><span class="k">營業時間</span><span class="v">24 小時</span></div>
 <div><span class="k">電話</span><span class="v"><a href="tel:0226550818">02-2655-0818</a></span></div>
 <div><span class="k">地圖</span><span class="v"><a href="https://www.google.com/maps?q=25.05329,121.59294" target="_blank">Google 地圖 ↗</a></span></div>
 </div>
@@ -32,6 +37,7 @@ const WORKER='https://yucheng-ev.borch1004.workers.dev/api/status';
 const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json';
 const CAR_ID='TPE0722';
 let carTotal=293,motorTotal=28; // TCMSV alldesc 靜態值,status.json 有值時覆寫
+const HC_TOTAL=8,PG_TOTAL=5,HM_TOTAL=6; // 身障/孕婦親子/大型重機 總數(alldesc summary)
 let carLive=false; // TCMSV 直連成功後,不再讓 status.json 備援值覆寫
 function setSpots(id,avail,total){
  if(avail==null&&total==null)return;
@@ -49,6 +55,9 @@ async function loadCar(){
   if(!p)throw new Error();
   setSpots('carSpots',p.availablecar,carTotal);
   setSpots('motorSpots',p.availablemotor,motorTotal);
+  setSpots('hcSpots',p.availablehandicap,HC_TOTAL);
+  setSpots('pgSpots',p.availablepregnancy,PG_TOTAL);
+  setSpots('hmSpots',p.availableheavymotor,HM_TOTAL);
   carLive=true;
  }catch(_){carLive=false;/* 直連失敗時保留 status.json 備援值 */}
 }
@@ -73,13 +82,16 @@ async function load(quiet){
   document.getElementById('total').textContent=d.total||6;
   document.getElementById('statusLabel').textContent=
     !d.live?'此刻來源無即時資料':(d.good>0?('目前有 '+d.good+' 座可充電（來源：'+d.source+'）'):'目前全部使用中');
-  if(d.parkFee)document.getElementById('parkFee').textContent=d.parkFee;
+  // 停車費率固定用停管處官方 payex(opendata 的「每0.5小時10元」與官方不符,不再套用)
   if(d.chgFee)document.getElementById('chgFee').textContent=d.chgFee;
   if(d.carTotal!=null)carTotal=d.carTotal;
   if(d.motorTotal!=null)motorTotal=d.motorTotal;
   if(!carLive&&d.carAvail!==undefined){
    setSpots('carSpots',d.carAvail,carTotal);
    setSpots('motorSpots',d.motorAvail,motorTotal);
+   setSpots('hcSpots',d.hcAvail,HC_TOTAL);
+   setSpots('pgSpots',d.pgAvail,PG_TOTAL);
+   setSpots('hmSpots',d.hmAvail,HM_TOTAL);
   }
   const box=document.getElementById('dots');box.innerHTML='';
   if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
