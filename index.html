@@ -13,11 +13,13 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 .ts{text-align:center;color:var(--sub);font-size:.74rem;margin-top:12px;line-height:1.5;white-space:pre-line}.err{color:var(--bad);font-size:.82rem;text-align:center;margin-top:10px;display:none}
 </style></head><body><div class="card">
 <h1>玉成國小地下停車場</h1>
-<p class="addr">台北市南港區昆陽街 23 號 B1–B2　·　充電樁 6 座</p>
+<p class="addr">台北市南港區昆陽街 23 號 B1–B2　·　充電樁 6 座　·　汽車位 293 格</p>
 <div class="big"><span class="num" id="avail">–</span><span class="of">可用 / 共 <b id="total">6</b> 座</span></div>
 <div class="label" id="statusLabel">載入中…</div>
 <div class="dots" id="dots"></div>
 <div class="meta">
+<div><span class="k">汽車位</span><span class="v" id="carSpots">–</span></div>
+<div><span class="k">機車位</span><span class="v" id="motorSpots">–</span></div>
 <div><span class="k">停車費率</span><span class="v" id="parkFee">每0.5小時10元</span></div>
 <div><span class="k">充電費率</span><span class="v" id="chgFee">計時/每日/5元每0.5時</span></div>
 <div><span class="k">電話</span><span class="v"><a href="tel:0226550818">02-2655-0818</a></span></div>
@@ -27,6 +29,29 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 <div class="ts" id="ts"></div><div class="err" id="err"></div>
 </div><script>
 const WORKER='https://yucheng-ev.borch1004.workers.dev/api/status';
+const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json';
+const CAR_ID='TPE0722';
+let carTotal=293,motorTotal=28; // TCMSV alldesc 靜態值,status.json 有值時覆寫
+let carLive=false; // TCMSV 直連成功後,不再讓 status.json 備援值覆寫
+function setSpots(id,avail,total){
+ if(avail==null&&total==null)return;
+ const t=(total==null?'–':total);
+ document.getElementById(id).innerHTML=(avail==null||avail<0)
+  ?'<span style="color:var(--sub)">無資料</span> / 共 '+t
+  :'<b style="color:var(--'+(avail===0?'bad':'good')+')">剩 '+avail+'</b> / 共 '+t;
+}
+async function loadCar(){
+ try{
+  const r=await fetch(TCMSV,{cache:'no-store'});
+  if(!r.ok)throw new Error();
+  const j=await r.json();
+  const p=((j.data&&j.data.park)||[]).find(x=>x.id===CAR_ID);
+  if(!p)throw new Error();
+  setSpots('carSpots',p.availablecar,carTotal);
+  setSpots('motorSpots',p.availablemotor,motorTotal);
+  carLive=true;
+ }catch(_){carLive=false;/* 直連失敗時保留 status.json 備援值 */}
+}
 async function fetchWorker(){
  const c=new AbortController(),t=setTimeout(()=>c.abort(),4000);
  try{
@@ -50,6 +75,12 @@ async function load(quiet){
     !d.live?'此刻來源無即時資料':(d.good>0?('目前有 '+d.good+' 座可充電（來源：'+d.source+'）'):'目前全部使用中');
   if(d.parkFee)document.getElementById('parkFee').textContent=d.parkFee;
   if(d.chgFee)document.getElementById('chgFee').textContent=d.chgFee;
+  if(d.carTotal!=null)carTotal=d.carTotal;
+  if(d.motorTotal!=null)motorTotal=d.motorTotal;
+  if(!carLive&&d.carAvail!==undefined){
+   setSpots('carSpots',d.carAvail,carTotal);
+   setSpots('motorSpots',d.motorAvail,motorTotal);
+  }
   const box=document.getElementById('dots');box.innerHTML='';
   if(d.live){for(let i=0;i<d.good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
    for(let i=0;i<d.bad;i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');}
@@ -62,6 +93,7 @@ async function load(quiet){
  }catch(err){if(!quiet){e.style.display='block';e.textContent='讀取失敗：'+err.message;}}
  finally{if(!quiet){b.disabled=false;b.textContent='重新整理';}}
 }
-load();
+load();loadCar();
 setInterval(()=>load(true),10000);
+setInterval(loadCar,60000); // TCMSV 官方 feed 約每分鐘更新一次
 </script></body></html>
