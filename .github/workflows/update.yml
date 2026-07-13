@@ -50,7 +50,7 @@ jobs:
           # 一般汽車/機車車位:台北市停管處 TCMSV 官方 feed (玉成國小 = TPE0722)
           # availablecar 為 -9 時代表該場站無即時資料,由前端顯示「無資料」
           CAR_ID = "TPE0722"
-          NEARBY_IDS = ["TPE1259", "TPE1810", "TPE0596", "TPE1780"]  # 新新公園/Times昆陽街/南港高中/國建南港昆陽
+          NEARBY_IDS = ["TPE1259", "TPE1810"]  # 新新公園/Times昆陽街
           car = {"carTotal":None, "carAvail":None, "motorTotal":None, "motorAvail":None,
                  "hcAvail":None, "pgAvail":None, "hmAvail":None,
                  "nearby":{i:None for i in NEARBY_IDS}}

@@ -34,8 +34,6 @@ h1{font-size:1.18rem;margin:0 0 2px}.addr{color:var(--sub);font-size:.82rem;marg
 <div><span class="k" style="color:var(--txt);font-weight:600">附近停車場</span><span class="v" style="color:var(--sub)">汽車位剩餘</span></div>
 <div><span class="k">新新公園平面</span><span class="v" id="lot-TPE1259">–</span></div>
 <div><span class="k">Times 昆陽街</span><span class="v" id="lot-TPE1810">–</span></div>
-<div><span class="k">南港高中</span><span class="v" id="lot-TPE0596">–</span></div>
-<div><span class="k">國建南港昆陽大樓</span><span class="v" id="lot-TPE1780">–</span></div>
 </div>
 <div class="bar"><button id="refresh" onclick="load()">重新整理</button></div>
 <div class="ts" id="ts"></div><div class="err" id="err"></div>
@@ -45,8 +43,9 @@ const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable
 const CAR_ID='TPE0722';
 let carTotal=293,motorTotal=28; // TCMSV alldesc 靜態值,status.json 有值時覆寫
 const HC_TOTAL=8,PG_TOTAL=5,HM_TOTAL=6; // 身障/孕婦親子/大型重機 總數(alldesc summary)
-// 附近停車場 (TCMSV id: 汽車位總數);南港高中回-9、國建不在即時feed→顯示無資料
-const NEARBY={TPE1259:10,TPE1810:247,TPE0596:31,TPE1780:172};
+// 附近停車場 (TCMSV id: 汽車位總數)
+// 南港高中TPE0596(月租/季票制無閘門)、國建TPE1780 無即時feed,已移除
+const NEARBY={TPE1259:10,TPE1810:247};
 let carLive=false; // TCMSV 直連成功後,不再讓 status.json 備援值覆寫
 function setSpots(id,avail,total){
  if(avail==null&&total==null)return;
