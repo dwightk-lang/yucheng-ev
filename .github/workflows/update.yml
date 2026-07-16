@@ -13,30 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 抓取充電樁(parkboss)與車位(TCMSV)
+      - name: 抓取並解析 opendata.vip
         run: |
           python3 - <<'PY'
           import urllib.request, ssl, re, json, datetime, time
-          ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
-          def http_get(url):
-              req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
-              return urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore")
-          # ── 充電樁主來源:parkboss.tw (2026-07-15 起,使用者指定) ──
-          # 每列 <td>🟢 閒置</td> / <td>🔴 充電中</td> + 最新更新時間;源頭斷供時標「連線異常」
-          good = bad = 0; source = "parkboss.tw"; src_time = ""; pb_stale = False
-          try:
-              pb = http_get("https://parkboss.tw/charging-station/TPE0722")
-              sts = re.findall(r"<td>[^<]*?(閒置|充電中|離線|故障|維護)[^<]*</td>", pb)
-              good = sts.count("閒置")
-              bad = len(sts) - good          # 充電中/離線/故障都視為不可用
-              m = re.search(r"20\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", pb)
-              src_time = m.group(0) if m else ""
-              pb_stale = "連線異常" in pb
-          except Exception as e:
-              print("parkboss fetch failed:", e)
-          # ── 備援 + 費率:opendata.vip (parkboss 完全抓不到時才用其樁況) ──
           SRC = "https://www.opendata.vip/tdx/evParking/Taipei"
           PRIMARY, BACKUP = "玉成國小地下停車場", "玉成國小站"
+          ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+          def fetch():
+              req = urllib.request.Request(SRC, headers={"User-Agent":"Mozilla/5.0"})
+              return urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore")
           def row_for(html, name):
               for m in re.finditer(re.escape(name), html):
                   if "<td" in html[max(0,m.start()-20):m.start()]:
@@ -44,43 +30,38 @@ jobs:
               return None
           def icons(row):
               return (row.count("air_good"), row.count("air_bad")) if row else (0, 0)
-          parkFee = chgFee = ""
-          try:
-              retries = 1 if good+bad > 0 else 4   # parkboss 有資料時只抓一次拿費率
-              live = backup = fee_row = None
-              for attempt in range(retries):
-                  if attempt: time.sleep(5)
-                  html = http_get(SRC)
-                  p, b = row_for(html, PRIMARY), row_for(html, BACKUP)
-                  if p: fee_row = p
-                  if sum(icons(p)):
-                      live = (PRIMARY, p); break
-                  if b and sum(icons(b)):
-                      backup = (BACKUP, b)
-              if fee_row:
-                  tds = [re.sub(r"<[^>]+>","",c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", fee_row, re.S)]
-                  parkFee = tds[1] if len(tds)>1 else ""
-                  chgFee = tds[3] if len(tds)>3 else ""
-              if good+bad == 0:
-                  live = live or backup
-                  if live:
-                      good, bad = icons(live[1])
-                      source, src_time = "opendata:"+live[0], ""
-                      pb_stale = live[0] != PRIMARY
-          except Exception as e:
-              print("opendata fetch failed:", e)
-          # ── 一般汽車/機車車位:台北市停管處 TCMSV 官方 feed (玉成國小 = TPE0722) ──
+          # 兩筆 feed 每次載入只有一筆帶即時圖示,且「停車場」feed 較新鮮:
+          # 重試直到抓到停車場那筆有圖示,備援才用「玉成國小站」(充電站 feed,會滯後數小時)
+          live = backup = fee_row = None
+          for attempt in range(6):
+              if attempt: time.sleep(5)
+              html = fetch()
+              p, b = row_for(html, PRIMARY), row_for(html, BACKUP)
+              if p: fee_row = p
+              if sum(icons(p)):
+                  live = (PRIMARY, p); break
+              if b and sum(icons(b)):
+                  backup = (BACKUP, b)
+          live = live or backup
+          if not live: raise SystemExit("找不到玉成國小即時資料")
+          good, bad = icons(live[1])
+          fee_row = fee_row or live[1]
+          tds = [re.sub(r"<[^>]+>","",c).strip() for c in re.findall(r"<td[^>]*>(.*?)</td>", fee_row, re.S)]
+          # 一般汽車/機車車位:台北市停管處 TCMSV 官方 feed (玉成國小 = TPE0722)
           # availablecar 為 -9 時代表該場站無即時資料,由前端顯示「無資料」
           CAR_ID = "TPE0722"
           NEARBY_IDS = ["TPE1259", "TPE1810"]  # 新新公園/Times昆陽街
           car = {"carTotal":None, "carAvail":None, "motorTotal":None, "motorAvail":None,
                  "hcAvail":None, "pgAvail":None, "hmAvail":None,
                  "nearby":{i:None for i in NEARBY_IDS}}
+          def get_json(url):
+              req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+              return json.loads(urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore"))
           try:
-              desc = json.loads(http_get("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_alldesc.json"))
+              desc = get_json("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_alldesc.json")
               p = next((x for x in desc["data"]["park"] if x.get("id")==CAR_ID), None)
               if p: car["carTotal"], car["motorTotal"] = p.get("totalcar"), p.get("totalmotor")
-              avail = json.loads(http_get("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json"))
+              avail = get_json("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json")
               by_id = {x.get("id"): x for x in avail["data"]["park"]}
               car["nearby"] = {i: (by_id[i].get("availablecar") if i in by_id else None) for i in NEARBY_IDS}
               a = by_id.get(CAR_ID)
@@ -91,14 +72,13 @@ jobs:
                   car["hmAvail"] = a.get("availableheavymotor")
           except Exception as e:
               print("TCMSV fetch failed (車位欄位維持 null):", e)
-          if good+bad == 0: raise SystemExit("parkboss 與 opendata 都抓不到樁況")
           tz = datetime.timezone(datetime.timedelta(hours=8))
           data = {
             "good":good, "bad":bad, "total":good+bad,
-            "live":good+bad>0, "source":source,
-            "srcTime":src_time,
-            "stale_feed":pb_stale,
-            "parkFee":parkFee, "chgFee":chgFee,
+            "live":good+bad>0, "source":live[0],
+            "stale_feed":live[0]!=PRIMARY,
+            "parkFee":tds[1] if len(tds)>1 else "",
+            "chgFee":tds[3] if len(tds)>3 else "",
             **car,
             "updated":datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
           }
