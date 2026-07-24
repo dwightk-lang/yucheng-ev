@@ -627,7 +627,7 @@
         </div>
         <div class="status-copy">
           <p class="label" id="statusLabel" aria-live="polite">載入中…</p>
-          <p class="status-hint">狀態每 30 秒自動更新</p>
+          <p class="status-hint">狀態每 5 秒自動更新</p>
         </div>
       </div>
 
@@ -853,7 +853,7 @@
        +'\n（備援模式：TCMSV 直連失敗，改用 status.json，每 5 分鐘更新）';
     }
     load();
-    setInterval(()=>load(true),30000); // TCMSV 官方 feed 約每分鐘更新一次
+    setInterval(()=>load(true),5000); // 每 5 秒查詢；TCMSV 官方 feed 約每分鐘更新一次
   </script>
 </body>
 </html>
