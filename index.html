@@ -53,6 +53,9 @@
       pointer-events: none;
     }
 
+    body.locked { overflow: hidden; }
+    body.locked .page { visibility: hidden; }
+
     button,
     a { -webkit-tap-highlight-color: transparent; }
 
@@ -136,6 +139,27 @@
       content: "";
       animation: pulse 2.2s ease-out infinite;
     }
+
+    .top-actions {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .lock-again {
+      width: 30px;
+      min-height: 30px;
+      padding: 0;
+      border-color: var(--line);
+      border-radius: 10px;
+      background: rgba(18, 27, 44, .7);
+      box-shadow: none;
+      color: var(--sub);
+      font-size: .85rem;
+    }
+
+    .lock-again::before { display: none; content: ""; }
 
     .card {
       position: relative;
@@ -544,6 +568,107 @@
       text-align: center;
     }
 
+    .lock-screen {
+      display: grid;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      padding: 18px;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(63, 111, 230, .2), transparent 28rem),
+        rgba(7, 11, 19, .96);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .lock-screen[hidden] { display: none; }
+
+    .lock-card {
+      width: min(100%, 340px);
+      padding: 23px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(18, 27, 44, .9);
+      box-shadow: var(--shadow), inset 0 1px rgba(255, 255, 255, .05);
+      text-align: center;
+    }
+
+    .lock-mark {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 14px;
+      place-items: center;
+      border: 1px solid rgba(101, 166, 255, .28);
+      border-radius: 15px;
+      background: linear-gradient(145deg, rgba(101, 166, 255, .22), rgba(138, 120, 255, .1));
+      color: #a9ceff;
+      font-size: 1.25rem;
+    }
+
+    .lock-card h2 {
+      margin: 0 0 7px;
+      font-size: 1.04rem;
+    }
+
+    .lock-copy {
+      margin: 0 0 18px;
+      color: var(--sub);
+      font-size: .72rem;
+      line-height: 1.55;
+    }
+
+    .lock-form { text-align: left; }
+
+    .lock-form label {
+      display: block;
+      margin: 0 0 7px;
+      color: #dbe6f8;
+      font-size: .7rem;
+      font-weight: 650;
+    }
+
+    .lock-form input {
+      width: 100%;
+      height: 44px;
+      margin-bottom: 9px;
+      padding: 0 13px;
+      border: 1px solid rgba(165, 184, 222, .2);
+      border-radius: 12px;
+      outline: none;
+      background: rgba(6, 11, 20, .58);
+      color: var(--txt);
+      font: inherit;
+      font-size: 1rem;
+      letter-spacing: .12em;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .lock-form input:focus {
+      border-color: rgba(101, 166, 255, .75);
+      box-shadow: 0 0 0 3px rgba(101, 166, 255, .11);
+    }
+
+    .unlock-button { margin-top: 3px; }
+    .unlock-button::before { content: "→"; }
+
+    .password-hint {
+      margin: 10px 0 0;
+      color: var(--sub);
+      font-size: .65rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .lock-error {
+      min-height: 1.2em;
+      margin: 8px 0 0;
+      color: #ff9ca5;
+      font-size: .68rem;
+      text-align: center;
+    }
+
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(67, 229, 155, .3); }
       70%, 100% { box-shadow: 0 0 0 7px rgba(67, 229, 155, 0); }
@@ -589,8 +714,24 @@
     }
   </style>
 </head>
-<body>
-  <main class="page">
+<body class="locked">
+  <section class="lock-screen" id="lockScreen" aria-labelledby="lockTitle">
+    <div class="lock-card">
+      <div class="lock-mark" aria-hidden="true">🔒</div>
+      <h2 id="lockTitle">玉成國小充電樁</h2>
+      <p class="lock-copy">這個頁面需要密碼。登入成功後，瀏覽器會記住這台裝置。</p>
+      <form class="lock-form" onsubmit="unlockDevice(event)">
+        <label for="accessPassword">存取密碼</label>
+        <input id="accessPassword" name="password" type="password" inputmode="numeric"
+          autocomplete="current-password" placeholder="請輸入密碼" required>
+        <button class="unlock-button" id="unlockButton" type="submit">登入並記住裝置</button>
+        <p class="password-hint">提示：Diana Chrome Scope PW</p>
+        <p class="lock-error" id="lockError" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
+
+  <main class="page" id="app" aria-hidden="true">
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">
@@ -605,7 +746,11 @@
           <h1>玉成國小地下停車場</h1>
         </div>
       </div>
-      <span class="live-pill">即時資訊</span>
+      <div class="top-actions">
+        <span class="live-pill">即時資訊</span>
+        <button class="lock-again" type="button" onclick="lockDevice()"
+          aria-label="在這台裝置登出並重新鎖定" title="重新鎖定">🔒</button>
+      </div>
     </header>
 
     <section class="card hero" aria-labelledby="charge-title">
@@ -778,6 +923,71 @@
   </main>
 
   <script>
+    // GitHub Pages 為靜態網站；此為前端輕量門禁，防止一般訪客誤入，並非伺服器端存取控制。
+    const AUTH_STORAGE_KEY='yucheng-ev-access-v1';
+    const AUTH_STORAGE_VALUE='remembered-device-v1';
+    const PASSWORD_HASH='d9a5edfc653305b10b4d8a8d9b4d3b0dad070063342957748e9bb8f606ff5b06';
+    let refreshTimer=null;
+
+    async function sha256(value){
+      const data=new TextEncoder().encode(value);
+      const hash=await crypto.subtle.digest('SHA-256',data);
+      return Array.from(new Uint8Array(hash),byte=>byte.toString(16).padStart(2,'0')).join('');
+    }
+
+    function startApp(){
+      if(refreshTimer)return;
+      load();
+      refreshTimer=setInterval(()=>load(true),5000);
+    }
+
+    function showApp(){
+      document.body.classList.remove('locked');
+      document.getElementById('lockScreen').hidden=true;
+      document.getElementById('app').setAttribute('aria-hidden','false');
+      startApp();
+    }
+
+    async function unlockDevice(event){
+      event.preventDefault();
+      const input=document.getElementById('accessPassword');
+      const button=document.getElementById('unlockButton');
+      const error=document.getElementById('lockError');
+      error.textContent='';
+      button.disabled=true;
+      button.textContent='驗證中…';
+      try{
+        if(await sha256(input.value)!==PASSWORD_HASH){
+          error.textContent='密碼不正確，請再試一次。';
+          input.select();
+          return;
+        }
+        try{localStorage.setItem(AUTH_STORAGE_KEY,AUTH_STORAGE_VALUE);}catch(e){}
+        input.value='';
+        showApp();
+      }catch(e){
+        error.textContent='目前無法驗證，請重新整理後再試。';
+      }finally{
+        button.disabled=false;
+        button.textContent='登入並記住裝置';
+      }
+    }
+
+    function lockDevice(){
+      try{localStorage.removeItem(AUTH_STORAGE_KEY);}catch(e){}
+      location.reload();
+    }
+
+    function restoreAccess(){
+      try{
+        if(localStorage.getItem(AUTH_STORAGE_KEY)===AUTH_STORAGE_VALUE){
+          showApp();
+          return;
+        }
+      }catch(e){}
+      requestAnimationFrame(()=>document.getElementById('accessPassword').focus());
+    }
+
     // 充電樁 + 車位皆來自台北市停管處 TCMSV 官方 feed(= itaipeiparking.pma.gov.taipei 同源,CORS 全開可瀏覽器直連)
     const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json';
     const CAR_ID='TPE0722';
@@ -853,8 +1063,7 @@
      document.getElementById('ts').textContent='資料時間：'+d.updated
        +'\n（備援模式：TCMSV 直連失敗，改用 status.json，每 5 分鐘更新）';
     }
-    load();
-    setInterval(()=>load(true),5000); // 每 5 秒查詢；TCMSV 官方 feed 約每分鐘更新一次
+    restoreAccess(); // 登入後每 5 秒查詢；TCMSV 官方 feed 約每分鐘更新一次
   </script>
 </body>
 </html>
