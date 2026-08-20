@@ -1,1 +1,1 @@
-{"good": 0, "bad": 6, "total": 6, "live": true, "source": "itaipeiparking/TCMSV", "stale_feed": false, "carTotal": 293, "carAvail": 0, "motorTotal": 28, "motorAvail": 0, "hcAvail": 0, "pgAvail": 1, "hmAvail": -9, "nearby": {"TPE1259": 1, "TPE1810": 8}, "updated": "2026-08-20 12:49:44"}
+{"good": 0, "bad": 6, "total": 6, "live": true, "source": "itaipeiparking/TCMSV", "stale_feed": false, "carTotal": 293, "carAvail": 0, "motorTotal": 28, "motorAvail": 0, "hcAvail": 0, "pgAvail": 1, "hmAvail": -9, "nearby": {"TPE1259": 0, "TPE1810": 6}, "updated": "2026-08-20 13:17:41"}
