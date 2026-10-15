@@ -7,8 +7,6 @@
   <meta name="color-scheme" content="dark">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23121b2c'/%3E%3Cpath d='M22 14v12m20-12v12M18 26h28v6a14 14 0 01-28 0v-6zm14 20v8' fill='none' stroke='%2343e59b' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
   <title>玉成國小地下停車場｜充電樁即時狀態</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <style>
     :root {
       --bg: #070b13;
@@ -726,19 +724,16 @@
         animation-iteration-count: 1 !important;
       }
     }
-    .road-card { padding: 12px; }
-    .road-map { height: 300px; border-radius: 14px; overflow: hidden; background: #0d1526; }
-    .road-note { display: flex; height: 100%; align-items: center; justify-content: center;
-      padding: 16px; color: var(--sub); font-size: .72rem; line-height: 1.6; text-align: center; }
-    .road-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
-      margin-top: 10px; color: var(--sub); font-size: .64rem; }
-    .road-legend span { display: inline-flex; align-items: center; gap: 5px; }
-    .road-legend i { width: 9px; height: 9px; border-radius: 50%; }
-    .road-legend .lg-vac { background: #43e59b; }
-    .road-legend .lg-me { background: #65a6ff; }
-    .road-ts { margin-left: auto; text-align: right; }
-    .leaflet-container { background: #0d1526; font: inherit; }
-    .leaflet-popup-content { margin: 9px 12px; font-size: .72rem; }
+    .road-card { padding: 14px; }
+    .road-link { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 16px; border-radius: 12px; text-decoration: none;
+      background: rgba(101, 166, 255, .08); border: 1px solid var(--line);
+      color: var(--txt); transition: background .15s, border-color .15s; }
+    .road-link:hover { background: rgba(101, 166, 255, .16); border-color: var(--accent); }
+    .road-link .rl-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .road-link .rl-title { font-size: .84rem; font-weight: 600; }
+    .road-link .rl-sub { font-size: .64rem; color: var(--sub); line-height: 1.5; }
+    .road-link .rl-go { font-size: 1.2rem; color: var(--accent); flex: none; }
   </style>
 </head>
 <body class="locked">
@@ -879,15 +874,16 @@
 
     <div class="section-heading">
       <h2>附近路邊空格</h2>
-      <span id="roadCount">1.5 km 內 –</span>
+      <span>即時查詢</span>
     </div>
-    <section class="card road-card" aria-label="附近 1.5 公里路邊停車空格地圖">
-      <div id="roadMap" class="road-map"></div>
-      <div class="road-legend">
-        <span><i class="lg-vac"></i>空格</span>
-        <span><i class="lg-me"></i>目標位置</span>
-        <span id="roadTs" class="road-ts"></span>
-      </div>
+    <section class="card road-card" aria-label="附近路邊停車即時查詢">
+      <a class="road-link" href="https://itaipeiparking.pma.gov.taipei/" target="_blank" rel="noopener noreferrer">
+        <span class="rl-main">
+          <span class="rl-title">開啟台北市即時路邊車位地圖</span>
+          <span class="rl-sub">itaipeiparking 官方即時資料；開啟後按「重新定位」即可查看所在位置附近空格</span>
+        </span>
+        <span class="rl-go" aria-hidden="true">↗</span>
+      </a>
     </section>
 
     <div class="section-heading">
@@ -979,9 +975,6 @@
       if(refreshTimer)return;
       load();
       refreshTimer=setInterval(()=>load(true),5000);
-      loadRoadside();
-      let rt=0,ri=setInterval(()=>{if(window.L){clearInterval(ri);loadRoadside();}else if(++rt>20)clearInterval(ri);},500);
-      setInterval(loadRoadside,60000);
     }
 
     function showApp(){
@@ -1118,38 +1111,9 @@
         }};
     }
     // 主來源 = itaipeiparking(status.json);同時試 TCMSV 直連,取「資料時間」較新者顯示
-    // ===== 附近路邊空格(itaipeiparking 路邊格;由 Actions 寫入 roadside.json) =====
-    const ROAD_CENTER=[25.051995,121.590969];
-    let roadMap=null,roadLayer=null,roadStamp=null;
-    function initRoadMap(){
-      if(roadMap||!window.L)return;
-      const el=document.getElementById('roadMap');if(!el)return;
-      roadMap=L.map(el,{preferCanvas:true,attributionControl:false}).setView(ROAD_CENTER,15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(roadMap);
-      L.circleMarker(ROAD_CENTER,{radius:7,color:'#65a6ff',weight:2,fillColor:'#65a6ff',fillOpacity:.95}).addTo(roadMap).bindPopup('目標位置');
-      roadLayer=L.layerGroup().addTo(roadMap);
-      setTimeout(()=>{try{roadMap.invalidateSize();}catch(e){}},200);
-    }
-    async function loadRoadside(){
-      let d;try{d=await (await fetch('roadside.json?t='+Date.now(),{cache:'no-store'})).json();}catch(e){return;}
-      const cnt=document.getElementById('roadCount');if(cnt)cnt.textContent='1.5 km 內 '+(d.vacant!=null?d.vacant:'–')+' 空格';
-      const ts=document.getElementById('roadTs');
-      if(ts){const t=parseItpTime(d.updated);
-        if(t){const a=Math.max(0,Math.round((Date.now()-t.getTime())/60000));
-          ts.textContent='感測時間 '+t.toLocaleString('zh-TW',{hour12:false})+'（'+(a<=0?'剛更新':a+' 分前')+'）'+(a>=STALE_MIN?' ⚠已逾'+a+'分未更新':'');}
-        else ts.textContent='';}
-      if(!window.L){const el=document.getElementById('roadMap');if(el&&!el.querySelector('.road-note'))el.innerHTML='<div class="road-note">地圖載入中…（若長時間空白，可能是網路限制了外部地圖元件）</div>';return;}
-      initRoadMap();
-      const stamp=(d.builtAt||'')+'|'+(d.updated||'');
-      if(stamp===roadStamp)return;
-      roadStamp=stamp;
-      if(roadLayer){roadLayer.clearLayers();
-        (d.spots||[]).forEach(s=>{L.circleMarker([s[0],s[1]],{radius:4,color:'#1f9d57',weight:1,fillColor:'#43e59b',fillOpacity:.85}).bindPopup(s[2]||'路邊空格').addTo(roadLayer);});
-      }
-    }
     async function load(quiet){
      const b=document.getElementById('refresh'),e=document.getElementById('err');
-     if(!quiet){b.disabled=true;e.style.display='none';b.textContent='載入中…';loadRoadside();}
+     if(!quiet){b.disabled=true;e.style.display='none';b.textContent='載入中…';}
      try{
       const [sv,tc]=await Promise.allSettled([
         fetch('status.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()),
