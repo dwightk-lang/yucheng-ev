@@ -140,6 +140,18 @@
       animation: pulse 2.2s ease-out infinite;
     }
 
+    .live-pill.stale {
+      border-color: rgba(255, 190, 90, .28);
+      background: rgba(255, 190, 90, .09);
+      color: #ffce93;
+    }
+
+    .live-pill.stale::before {
+      background: #ffbe5a;
+      box-shadow: 0 0 0 4px rgba(255, 190, 90, .12);
+      animation: none;
+    }
+
     .top-actions {
       display: flex;
       flex: 0 0 auto;
@@ -996,7 +1008,29 @@
     // 附近停車場 (TCMSV id: 汽車位總數)
     // 南港高中TPE0596(月租/季票制無閘門)、國建TPE1780 無即時feed,已移除
     const NEARBY={TPE1259:10,TPE1810:247};
-    let tcmsvLive=false; // TCMSV 直連成功後,不再讓 status.json 備援值覆寫
+    const STALE_MIN=6; // 官方資料逾此分鐘數未更新 → 畫面示警(feed 正常約每分鐘更新)
+    // 解析 TCMSV 的 UPDATETIME:「Thu Oct 15 08:42:00 CST 2026」,此處 CST=台北 UTC+8
+    //（JS 直接 new Date() 會把 CST 當成美國中部時區,誤差 14 小時,故手動解析）
+    function parseTcmsvTime(str){
+      const m=/([A-Z][a-z]{2})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+\S+\s+(\d{4})/.exec(str||'');
+      if(!m)return null;
+      const mon={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[1]];
+      if(mon==null)return null;
+      return new Date(Date.UTC(+m[6],mon,+m[2],+m[3],+m[4],+m[5])-8*3600*1000);
+    }
+    // 解析 itaipeiparking 的 updateTime:「2026-10-15 10:24」(台北 UTC+8)
+    function parseItpTime(str){
+      const m=/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(str||'');
+      if(!m)return null;
+      return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5])-8*3600*1000);
+    }
+    // 滯後時把右上「即時資訊」膠囊轉為「資料延遲」(琥珀色)
+    function setPillStale(stale){
+      const pill=document.querySelector('.live-pill');
+      if(!pill)return;
+      pill.classList.toggle('stale',!!stale);
+      pill.textContent=stale?'資料延遲':'即時資訊';
+    }
     function setSpots(id,avail,total){
      if(avail==null&&total==null)return;
      const t=(total==null?'–':total);
@@ -1016,52 +1050,75 @@
      for(let i=0;i<good;i++)box.insertAdjacentHTML('beforeend','<div class="dot good">空</div>');
      for(let i=0;i<Math.max(0,total-good);i++)box.insertAdjacentHTML('beforeend','<div class="dot bad">用</div>');
     }
+    // 由 status.json(itaipeiparking,Actions 伺服器端抓)組候選
+    function candFromStatus(d){
+      if(!d||d.live===false)return null;
+      return {time:parseItpTime(d.updated),
+        src:(d.source==='TCMSV'?'台北市停管處 TCMSV':'台北市停管處 itaipeiparking'),
+        apply(){
+          renderCharge(d.good||0,d.total||6);
+          if(d.carTotal!=null)carTotal=d.carTotal;
+          if(d.motorTotal!=null)motorTotal=d.motorTotal;
+          setSpots('carSpots',d.carAvail,carTotal);
+          setSpots('motorSpots',d.motorAvail,motorTotal);
+          setSpots('hcSpots',d.hcAvail,HC_TOTAL);
+          setSpots('pgSpots',d.pgAvail,PG_TOTAL);
+          setSpots('hmSpots',d.hmAvail,HM_TOTAL);
+          if(d.nearby)Object.keys(NEARBY).forEach(id=>setSpots('lot-'+id,d.nearby[id],NEARBY[id]));
+        }};
+    }
+    // 由 TCMSV 直連組候選(瀏覽器可直連、真即時,但會間歇滯後)
+    function candFromTcmsv(j){
+      const parks=(j&&j.data&&j.data.park)||[];
+      const p=parks.find(x=>x.id===CAR_ID);
+      if(!p)return null;
+      const list=(p.ChargeStation&&p.ChargeStation.scoketStatusList)||[];
+      const good=list.filter(s=>s.spot_status==='待機中').length;
+      return {time:parseTcmsvTime(j.data&&j.data.UPDATETIME),
+        src:'台北市停管處 TCMSV',
+        apply(){
+          renderCharge(good,list.length);
+          setSpots('carSpots',p.availablecar,carTotal);
+          setSpots('motorSpots',p.availablemotor,motorTotal);
+          setSpots('hcSpots',p.availablehandicap,HC_TOTAL);
+          setSpots('pgSpots',p.availablepregnancy,PG_TOTAL);
+          setSpots('hmSpots',p.availableheavymotor,HM_TOTAL);
+          Object.keys(NEARBY).forEach(id=>{const q=parks.find(x=>x.id===id);setSpots('lot-'+id,q?q.availablecar:null,NEARBY[id]);});
+        }};
+    }
+    // 主來源 = itaipeiparking(status.json);同時試 TCMSV 直連,取「資料時間」較新者顯示
     async function load(quiet){
      const b=document.getElementById('refresh'),e=document.getElementById('err');
      if(!quiet){b.disabled=true;e.style.display='none';b.textContent='載入中…';}
      try{
-      const r=await fetch(TCMSV,{cache:'no-store'});
-      if(!r.ok)throw new Error('TCMSV http '+r.status);
-      const j=await r.json();
-      const parks=(j.data&&j.data.park)||[];
-      const p=parks.find(x=>x.id===CAR_ID);
-      if(!p)throw new Error('TCMSV 無 '+CAR_ID);
-      // 充電樁:停管處 ChargeStation.scoketStatusList(= itaipeiparking 顯示的同一份)
-      const list=(p.ChargeStation&&p.ChargeStation.scoketStatusList)||[];
-      const good=list.filter(s=>s.spot_status==='待機中').length;
-      renderCharge(good,list.length);
-      // 車位
-      Object.keys(NEARBY).forEach(id=>{const q=parks.find(x=>x.id===id);setSpots('lot-'+id,q?q.availablecar:null,NEARBY[id]);});
-      setSpots('carSpots',p.availablecar,carTotal);
-      setSpots('motorSpots',p.availablemotor,motorTotal);
-      setSpots('hcSpots',p.availablehandicap,HC_TOTAL);
-      setSpots('pgSpots',p.availablepregnancy,PG_TOTAL);
-      setSpots('hmSpots',p.availableheavymotor,HM_TOTAL);
-      tcmsvLive=true;
-      document.getElementById('ts').textContent='即時查詢：'+new Date().toLocaleString('zh-TW',{hour12:false})
-        +'\n（來源：台北市停管處 itaipeiparking，約每分鐘更新）';
+      const [sv,tc]=await Promise.allSettled([
+        fetch('status.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()),
+        fetch(TCMSV,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject(new Error('http '+r.status)))
+      ]);
+      const cands=[];
+      if(sv.status==='fulfilled'){const c=candFromStatus(sv.value);if(c)cands.push(c);}
+      if(tc.status==='fulfilled'){const c=candFromTcmsv(tc.value);if(c)cands.push(c);}
+      if(!cands.length)throw new Error('兩個來源都讀取失敗');
+      cands.sort((x,y)=>(y.time?y.time.getTime():0)-(x.time?x.time.getTime():0));
+      const best=cands[0];
+      best.apply();
+      const tsEl=document.getElementById('ts');
+      if(best.time){
+       const ageMin=Math.max(0,Math.round((Date.now()-best.time.getTime())/60000));
+       const stale=ageMin>=STALE_MIN;
+       setPillStale(stale);
+       tsEl.textContent='資料時間：'+best.time.toLocaleString('zh-TW',{hour12:false})
+         +'（'+(ageMin<=0?'剛更新':ageMin+' 分鐘前')+'）'
+         +'\n來源：'+best.src
+         +(stale?'\n⚠ 官方資料已逾 '+ageMin+' 分鐘未更新,現場實況可能與此不同':'');
+      }else{
+       setPillStale(true);
+       tsEl.textContent='來源：'+best.src+'\n（本次未取得官方資料時間）';
+      }
      }catch(err){
-      // TCMSV 直連失敗 → 退回 workflow 產生的 status.json 備援
-      try{await loadFallback();}
-      catch(e2){if(!quiet){e.style.display='block';e.textContent='讀取失敗：'+err.message;}}
+      if(!quiet){e.style.display='block';e.textContent='讀取失敗：'+err.message;}
      }
      finally{if(!quiet){b.disabled=false;b.textContent='重新整理';}}
-    }
-    async function loadFallback(){
-     const d=await (await fetch('status.json?t='+Date.now(),{cache:'no-store'})).json();
-     if(tcmsvLive)return; // 直連稍後成功就別覆寫
-     renderCharge(d.live?d.good:0,d.total||6);
-     if(!d.live)document.getElementById('avail').textContent='–';
-     if(d.carTotal!=null)carTotal=d.carTotal;
-     if(d.motorTotal!=null)motorTotal=d.motorTotal;
-     setSpots('carSpots',d.carAvail,carTotal);
-     setSpots('motorSpots',d.motorAvail,motorTotal);
-     setSpots('hcSpots',d.hcAvail,HC_TOTAL);
-     setSpots('pgSpots',d.pgAvail,PG_TOTAL);
-     setSpots('hmSpots',d.hmAvail,HM_TOTAL);
-     if(d.nearby)Object.keys(NEARBY).forEach(id=>setSpots('lot-'+id,d.nearby[id],NEARBY[id]));
-     document.getElementById('ts').textContent='資料時間：'+d.updated
-       +'\n（備援模式：TCMSV 直連失敗，改用 status.json，每 5 分鐘更新）';
     }
     restoreAccess(); // 登入後每 5 秒查詢；TCMSV 官方 feed 約每分鐘更新一次
   </script>

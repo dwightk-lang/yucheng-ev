@@ -1,8 +1,8 @@
 name: update-status
 on:
   schedule:
-    - cron: '*/5 * * * *'   # 每 5 分鐘（GitHub cron 最短間隔）
-  workflow_dispatch:          # 也可在 Actions 頁手動執行
+    - cron: '*/5 * * * *'   # 每 5 分鐘(GitHub cron 最短間隔;實際會被節流,詳見 README)
+  workflow_dispatch:          # 也可手動 / 外部 cron 觸發
 permissions:
   contents: write
 concurrency:
@@ -13,48 +13,63 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 抓取並解析停管處 TCMSV (= itaipeiparking 同源)
+      - name: 抓 itaipeiparking 官方站(w1/GetParks)產 status.json;失敗才退回 TCMSV
         run: |
           python3 - <<'PY'
-          import urllib.request, ssl, json, datetime
-          # 充電樁 + 車位皆來自台北市停管處 TCMSV 官方 feed(玉成國小 = TPE0722)
-          # 這與 itaipeiparking.pma.gov.taipei 為同一後端;充電樁狀態在 ChargeStation.scoketStatusList
-          CAR_ID = "TPE0722"
-          NEARBY_IDS = ["TPE1259", "TPE1810"]  # 新新公園/Times昆陽街
-          ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
-          def get_json(url):
-              req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
-              return json.loads(urllib.request.urlopen(req, timeout=40, context=ctx).read().decode("utf-8","ignore"))
-          avail = get_json("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json")
-          by_id = {x.get("id"): x for x in avail["data"]["park"]}
-          p = by_id.get(CAR_ID)
-          if not p: raise SystemExit("TCMSV 無 " + CAR_ID)
-          # 充電樁:待機中=可用、其餘(充電中/離線/故障)=不可用
-          lst = ((p.get("ChargeStation") or {}).get("scoketStatusList")) or []
-          good = sum(1 for s in lst if s.get("spot_status") == "待機中")
-          total = len(lst); bad = total - good
-          # 車位總數(靜態,alldesc)
-          carTotal = motorTotal = None
+          # itaipeiparking(台北市停管處官方站)後端 w1/GetParks:新鮮且每場站帶 updateTime
+          # 需 CSRF token(首頁 hidden input)+ cookie,且無 CORS → 只能伺服器端抓(此處),瀏覽器不能直連
+          import urllib.request, http.cookiejar, ssl, json, re, datetime, sys
+          TPE='TPE0722'; NEARBY=['TPE1259','TPE1810']; LON,LAT='121.59294','25.05329'
+          BASE='https://itaipeiparking.pma.gov.taipei'
+          TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json'
+          TZ=datetime.timezone(datetime.timedelta(hours=8))
+          ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+          UA='Mozilla/5.0 (compatible; yucheng-ev/1.0)'
+          def _int(v):
+              try: return int(v)
+              except: return None
+          def fetch_itp():
+              cj=http.cookiejar.CookieJar()
+              op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj),
+                                             urllib.request.HTTPSHandler(context=ctx))
+              html=op.open(urllib.request.Request(BASE+'/',headers={'User-Agent':UA}),timeout=40).read().decode('utf-8','ignore')
+              m=re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',html) or \
+                re.search(r'value="([^"]+)"[^>]*name="__RequestVerificationToken"',html)
+              if not m: raise RuntimeError('no CSRF token')
+              url=f'{BASE}/w1/GetParks/{LON}/{LAT}/car/1'
+              req=urllib.request.Request(url,headers={'User-Agent':UA,'Content-Type':'application/json','X-CSRF-TOKEN':m.group(1)})
+              arr=json.loads(op.open(req,timeout=40).read().decode('utf-8','ignore'))
+              by={x.get('parkId'):x for x in arr if isinstance(x,dict)}
+              p=by.get(TPE)
+              if not p: raise RuntimeError('GetParks no '+TPE)
+              g=_int(p.get('chargeStation'))
+              return {'source':'itaipeiparking','updated':p.get('updateTime'),'live':True,
+                'good':(g if g is not None else 0),'total':(_int(p.get('chargeStationTotalNum')) or 6),
+                'carTotal':_int(p.get('carTotalNum')),'carAvail':_int(p.get('carRemainderNum')),
+                'motorTotal':_int(p.get('motorTotalNum')),'motorAvail':_int(p.get('motorRemainderNum')),
+                'hcAvail':_int(p.get('handicap_FirstRemainderNum')),
+                'pgAvail':_int(p.get('pregnancy_FirstRemainderNum')),
+                'hmAvail':_int(p.get('largeMotorRemainderNum')),
+                'nearby':{i:(_int(by[i].get('carRemainderNum')) if i in by else None) for i in NEARBY},
+                'builtAt':datetime.datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')}
+          def fetch_tcmsv():
+              j=json.loads(urllib.request.urlopen(urllib.request.Request(TCMSV,headers={'User-Agent':UA}),timeout=40,context=ctx).read().decode('utf-8','ignore'))
+              by={x.get('id'):x for x in j['data']['park']}; p=by.get(TPE)
+              lst=((p.get('ChargeStation') or {}).get('scoketStatusList')) or []
+              good=sum(1 for s in lst if s.get('spot_status')=='待機中')
+              ut=j['data'].get('UPDATETIME',''); mm=re.search(r'(\w{3}) +(\d+) (\d+):(\d+):\d+ \w+ (\d+)',ut)
+              mon={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
+              upd=(f'{mm.group(5)}-{mon[mm.group(1)]:02d}-{int(mm.group(2)):02d} {mm.group(3)}:{mm.group(4)}' if mm else ut)
+              return {'source':'TCMSV','updated':upd,'live':len(lst)>0,'good':good,'total':len(lst) or 6,
+                'carTotal':293,'carAvail':p.get('availablecar'),'motorTotal':28,'motorAvail':p.get('availablemotor'),
+                'hcAvail':p.get('availablehandicap'),'pgAvail':p.get('availablepregnancy'),'hmAvail':p.get('availableheavymotor'),
+                'nearby':{i:(by[i].get('availablecar') if i in by else None) for i in NEARBY},
+                'builtAt':datetime.datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')}
           try:
-              desc = get_json("https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_alldesc.json")
-              d0 = next((x for x in desc["data"]["park"] if x.get("id")==CAR_ID), None)
-              if d0: carTotal, motorTotal = d0.get("totalcar"), d0.get("totalmotor")
+              data=fetch_itp()
           except Exception as e:
-              print("alldesc fetch failed (總數維持 null):", e)
-          nearby = {i: (by_id[i].get("availablecar") if i in by_id else None) for i in NEARBY_IDS}
-          tz = datetime.timezone(datetime.timedelta(hours=8))
-          data = {
-            "good":good, "bad":bad, "total":total or 6,
-            "live":total>0, "source":"itaipeiparking/TCMSV", "stale_feed":False,
-            "carTotal":carTotal, "carAvail":p.get("availablecar"),
-            "motorTotal":motorTotal, "motorAvail":p.get("availablemotor"),
-            "hcAvail":p.get("availablehandicap"),
-            "pgAvail":p.get("availablepregnancy"),
-            "hmAvail":p.get("availableheavymotor"),
-            "nearby":nearby,
-            "updated":datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S"),
-          }
-          open("status.json","w",encoding="utf-8").write(json.dumps(data,ensure_ascii=False))
+              sys.stderr.write('itaipeiparking failed, fallback TCMSV: %s\n'%e); data=fetch_tcmsv()
+          open('status.json','w',encoding='utf-8').write(json.dumps(data,ensure_ascii=False))
           print(data)
           PY
       - name: 提交更新
