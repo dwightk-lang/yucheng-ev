@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#09111f">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23121b2c'/%3E%3Cpath d='M32 56s-16-15-16-26a16 16 0 0132 0c0 11-16 26-16 26z' fill='none' stroke='%2343e59b' stroke-width='5'/%3E%3Ccircle cx='32' cy='30' r='6' fill='%2343e59b'/%3E%3C/svg%3E">
+  <title>附近路邊空格｜南港路三段47巷55號</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin="">
+  <style>
+    :root {
+      --bg: #070b13;
+      --card: rgba(18, 27, 44, .78);
+      --card-solid: #121b2c;
+      --txt: #f3f7ff;
+      --sub: #8f9bb3;
+      --good: #43e59b;
+      --bad: #ff6b78;
+      --warn: #ffc857;
+      --accent: #65a6ff;
+      --accent-2: #8a78ff;
+      --line: rgba(165, 184, 222, .14);
+      --shadow: 0 28px 80px rgba(0, 0, 0, .38);
+    }
+    * { box-sizing: border-box; }
+    html { min-width: 320px; }
+    body {
+      min-height: 100vh; margin: 0; overflow-x: hidden;
+      background:
+        radial-gradient(circle at 8% 8%, rgba(70, 111, 255, .16), transparent 32rem),
+        radial-gradient(circle at 92% 32%, rgba(90, 64, 220, .14), transparent 28rem),
+        var(--bg);
+      color: var(--txt);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    body.locked .page { display: none; }
+    .page { width: min(100%, 720px); margin: 0 auto; padding: 14px 16px 40px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark { display: grid; width: 40px; height: 40px; flex: none; place-items: center; border: 1px solid rgba(101,166,255,.28); border-radius: 13px; background: linear-gradient(145deg, rgba(101,166,255,.22), rgba(138,120,255,.1)); color: #a9ceff; }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .eyebrow { margin: 0 0 2px; color: var(--sub); font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
+    h1 { margin: 0; font-size: 1.02rem; font-weight: 700; line-height: 1.25; white-space: nowrap; }
+    .top-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+    .live-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid rgba(67,229,155,.35); border-radius: 999px; background: rgba(67,229,155,.1); color: var(--good); font-size: .66rem; font-weight: 650; white-space: nowrap; }
+    .live-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1.8s infinite; }
+    .live-pill.stale { border-color: rgba(255,200,87,.4); background: rgba(255,200,87,.1); color: var(--warn); }
+    .live-pill.stale::before { animation: none; }
+    .live-pill.err { border-color: rgba(255,107,120,.4); background: rgba(255,107,120,.1); color: var(--bad); }
+    .icon-btn { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--line); border-radius: 11px; background: rgba(18,27,44,.7); color: var(--txt); font: inherit; font-size: .95rem; cursor: pointer; text-decoration: none; }
+    .icon-btn:hover { border-color: var(--accent); }
+    .card { position: relative; margin-bottom: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--card); box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.04); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    .addr { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: var(--sub); font-size: .72rem; }
+    .addr svg { width: 15px; height: 15px; flex: none; color: var(--accent); }
+    .summary { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .big { display: flex; align-items: baseline; gap: 8px; }
+    .num { font-size: 2.6rem; font-weight: 800; line-height: 1; letter-spacing: -.03em; color: var(--good); }
+    .num.zero { color: var(--bad); }
+    .of { color: var(--sub); font-size: .72rem; line-height: 1.35; }
+    .of b { color: var(--txt); }
+    .ts { margin: 8px 0 0; color: var(--sub); font-size: .68rem; line-height: 1.5; }
+    .ts.stale { color: var(--warn); }
+    .ts .warn { color: var(--bad); font-weight: 650; }
+    .map-card { padding: 8px; }
+    #map { width: 100%; height: min(62vh, 560px); min-height: 340px; border-radius: 14px; background: #0d1626; overflow: hidden; }
+    .leaflet-container { font: inherit; background: #0d1626; }
+    .leaflet-control-attribution { font-size: .58rem !important; background: rgba(7,11,19,.7) !important; color: var(--sub) !important; }
+    .leaflet-control-attribution a { color: var(--accent) !important; }
+    .leaflet-bar a { background: var(--card-solid) !important; color: var(--txt) !important; border-color: var(--line) !important; }
+    .leaflet-tooltip { background: rgba(18,27,44,.96); border: 1px solid var(--line); color: var(--txt); font-size: .7rem; line-height: 1.45; border-radius: 8px; padding: 6px 8px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .leaflet-tooltip-top:before { border-top-color: rgba(18,27,44,.96); }
+    .center-label { background: rgba(101,166,255,.95); color: #06101f; font-weight: 700; font-size: .62rem; padding: 2px 6px; border-radius: 6px; border: none; white-space: nowrap; }
+    .map-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 6px 2px; }
+    .legend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--sub); font-size: .64rem; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+    .legend .lv { background: var(--good); }
+    .legend .lo { background: rgba(255,107,120,.55); }
+    .legend .lf { background: var(--warn); }
+    .legend .lu { background: transparent; border: 1.5px solid #6f7d99; }
+    .legend .ls { background: transparent; border: 1.5px dashed var(--accent-2); }
+    .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(18,27,44,.8); color: var(--txt); font: inherit; font-size: .7rem; font-weight: 600; cursor: pointer; }
+    .btn:hover { border-color: var(--accent); }
+    .btn[disabled] { opacity: .55; cursor: default; }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 18px 2px 10px; }
+    h2 { margin: 0; font-size: .92rem; font-weight: 700; }
+    .section-heading span { color: var(--sub); font-size: .66rem; }
+    .seg-list { display: flex; flex-direction: column; gap: 8px; }
+    .seg { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px; background: rgba(9,16,29,.55); cursor: pointer; }
+    .seg:hover { border-color: var(--accent); }
+    .seg-main { min-width: 0; }
+    .seg-name { font-size: .82rem; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .seg-sub { margin-top: 3px; color: var(--sub); font-size: .62rem; line-height: 1.45; }
+    .seg-cnt { flex: none; text-align: right; }
+    .seg-cnt b { display: block; font-size: 1.25rem; font-weight: 800; line-height: 1; color: var(--good); }
+    .seg-cnt b.zero { color: var(--bad); }
+    .seg-cnt b.na { color: #6f7d99; font-size: .9rem; }
+    .seg-cnt small { color: var(--sub); font-size: .6rem; }
+    .more { width: 100%; justify-content: center; margin-top: 4px; }
+    .note { margin: 10px 2px 0; color: var(--sub); font-size: .64rem; line-height: 1.6; }
+    .note a { color: var(--accent); }
+    .err { min-height: 1.2em; margin: 8px 2px 0; color: #ff9ca5; font-size: .68rem; }
+    .lock-screen { display: grid; position: fixed; inset: 0; z-index: 100; padding: 18px; place-items: center; background: radial-gradient(circle at 50% 18%, rgba(63,111,230,.2), transparent 28rem), rgba(7,11,19,.96); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+    .lock-screen[hidden] { display: none; }
+    .lock-card { width: min(100%, 340px); padding: 23px; border: 1px solid var(--line); border-radius: 20px; background: rgba(18,27,44,.9); box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.05); text-align: center; }
+    .lock-mark { display: grid; width: 48px; height: 48px; margin: 0 auto 14px; place-items: center; border: 1px solid rgba(101,166,255,.28); border-radius: 15px; background: linear-gradient(145deg, rgba(101,166,255,.22), rgba(138,120,255,.1)); color: #a9ceff; font-size: 1.25rem; }
+    .lock-card h2 { margin: 0 0 7px; font-size: 1.04rem; }
+    .lock-copy { margin: 0 0 18px; color: var(--sub); font-size: .72rem; line-height: 1.55; }
+    .lock-form { text-align: left; }
+    .lock-form label { display: block; margin: 0 0 7px; color: #dbe6f8; font-size: .7rem; font-weight: 650; }
+    .lock-form input { width: 100%; height: 44px; margin-bottom: 9px; padding: 0 13px; border: 1px solid rgba(165,184,222,.2); border-radius: 12px; outline: none; background: rgba(6,11,20,.58); color: var(--txt); font: inherit; font-size: 1rem; letter-spacing: .12em; }
+    .lock-form input:focus { border-color: rgba(101,166,255,.75); box-shadow: 0 0 0 3px rgba(101,166,255,.11); }
+    .unlock-button { width: 100%; height: 44px; margin-top: 3px; border: none; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #06101f; font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; }
+    .unlock-button[disabled] { opacity: .6; cursor: default; }
+    .password-hint { margin: 10px 0 0; color: var(--sub); font-size: .65rem; line-height: 1.5; text-align: center; }
+    .lock-error { min-height: 1.2em; margin: 8px 0 0; color: #ff9ca5; font-size: .68rem; text-align: center; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(67,229,155,.3); } 70%, 100% { box-shadow: 0 0 0 7px rgba(67,229,155,0); } }
+    @media (min-width: 620px) { .page { padding-top: 28px; } .num { font-size: 3rem; } }
+  </style>
+</head>
+<body class="locked">
+  <section class="lock-screen" id="lockScreen" aria-labelledby="lockTitle">
+    <div class="lock-card">
+      <div class="lock-mark" aria-hidden="true">🔒</div>
+      <h2 id="lockTitle">附近路邊空格</h2>
+      <p class="lock-copy">這個頁面需要密碼。登入成功後，瀏覽器會記住這台裝置（與充電樁頁共用）。</p>
+      <form class="lock-form" onsubmit="unlockDevice(event)">
+        <label for="accessPassword">存取密碼</label>
+        <input id="accessPassword" name="password" type="password" inputmode="numeric" autocomplete="current-password" placeholder="請輸入密碼" required>
+        <button class="unlock-button" id="unlockButton" type="submit">登入並記住裝置</button>
+        <p class="password-hint">提示：Diana Chrome (2****7)</p>
+        <p class="lock-error" id="lockError" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
+
+  <main class="page" id="app" aria-hidden="true">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>
+          </svg>
+        </span>
+        <div>
+          <p class="eyebrow">Roadside parking</p>
+          <h1>附近路邊空格</h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="live-pill" id="pill">載入中</span>
+        <a class="icon-btn" href="index.html" aria-label="回到充電樁頁" title="回到充電樁頁">↩</a>
+        <button class="icon-btn" type="button" onclick="lockDevice()" aria-label="在這台裝置登出並重新鎖定" title="重新鎖定">🔒</button>
+      </div>
+    </header>
+
+    <section class="card" aria-labelledby="sum-title">
+      <p class="addr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>
+        </svg>
+        <span id="addrText">台北市南港區南港路三段 47 巷 55 號 周邊 1.5 km</span>
+      </p>
+      <div class="summary">
+        <div class="big">
+          <span class="num" id="vacant" aria-live="polite">–</span>
+          <span class="of" id="sum-title">格路邊空格<br>一般格 <b id="vacantGeneral">–</b> · 有感測 <b id="known">–</b> 格</span>
+        </div>
+        <button class="btn" id="refresh" type="button" onclick="load(false)">↻ 重新整理</button>
+      </div>
+      <p class="ts" id="ts">正在讀取停管處路邊格位資料…</p>
+      <div class="err" id="err" role="alert"></div>
+    </section>
+
+    <section class="card map-card" aria-label="路邊格位即時地圖">
+      <div id="map" role="img" aria-label="以南港路三段47巷55號為中心的路邊格位地圖"></div>
+      <div class="map-tools">
+        <div class="legend" aria-label="圖例">
+          <span><i class="lv"></i>空格</span>
+          <span><i class="lo"></i>有車</span>
+          <span><i class="lf"></i>設備異常</span>
+          <span><i class="lu"></i>無感測</span>
+          <span><i class="ls"></i>身障／卸貨／時段</span>
+        </div>
+        <button class="btn" type="button" onclick="recenter()">⌖ 回到 47 巷</button>
+      </div>
+      <p class="note" id="mapNote" hidden>地圖元件載入失敗（可能被網路封鎖），以下仍可看各路段空格數。</p>
+    </section>
+
+    <div class="section-heading">
+      <h2>各路段空格</h2>
+      <span id="segHint">由近到遠</span>
+    </div>
+    <div class="seg-list" id="segList"></div>
+    <button class="btn more" id="moreBtn" type="button" hidden onclick="toggleMore()">顯示更多路段</button>
+
+    <p class="note">
+      資料來源：台北市停車管理工程處 TCMSV 路邊格位即時檔（約每 5 分鐘更新，瀏覽器直接讀取）；格位座標取自 data.taipei「臺北市路邊停車格位」。
+      「無感測」表示該格目前沒有即時狀態回報。需要官方介面可開啟
+      <a href="https://itaipeiparking.pma.gov.taipei/" target="_blank" rel="noopener noreferrer">北市好停車</a>（需手動定位）。
+    </p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin=""></script>
+  <script>
+    // ---- 前端輕量門禁（與 index.html 共用 localStorage 鍵與密碼雜湊，已登入的裝置直接進入）----
+    const AUTH_STORAGE_KEY='yucheng-ev-access-v1';
+    const AUTH_STORAGE_VALUE='remembered-device-v1';
+    const PASSWORD_HASH='d9a5edfc653305b10b4d8a8d9b4d3b0dad070063342957748e9bb8f606ff5b06';
+
+    async function sha256(value){
+      const data=new TextEncoder().encode(value);
+      const hash=await crypto.subtle.digest('SHA-256',data);
+      return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
+    }
+    async function unlockDevice(event){
+      event.preventDefault();
+      const input=document.getElementById('accessPassword');
+      const button=document.getElementById('unlockButton');
+      const error=document.getElementById('lockError');
+      error.textContent=''; button.disabled=true; button.textContent='驗證中…';
+      try{
+        if(await sha256(input.value)!==PASSWORD_HASH){ error.textContent='密碼不正確，請再試一次。'; input.select(); return; }
+        try{localStorage.setItem(AUTH_STORAGE_KEY,AUTH_STORAGE_VALUE);}catch(e){}
+        input.value=''; showApp();
+      }catch(e){ error.textContent='目前無法驗證，請重新整理後再試。'; }
+      finally{ button.disabled=false; button.textContent='登入並記住裝置'; }
+    }
+    function lockDevice(){
+      try{localStorage.removeItem(AUTH_STORAGE_KEY);}catch(e){}
+      location.reload();
+    }
+    function showApp(){
+      document.body.classList.remove('locked');
+      document.getElementById('lockScreen').hidden=true;
+      document.getElementById('app').setAttribute('aria-hidden','false');
+      startApp();
+    }
+    function restoreAccess(){
+      try{ if(localStorage.getItem(AUTH_STORAGE_KEY)===AUTH_STORAGE_VALUE){ showApp(); return; } }catch(e){}
+      requestAnimationFrame(()=>document.getElementById('accessPassword').focus());
+    }
+
+    // ---- 設定 ----
+    const CENTER=[25.051989,121.591180];          // 115 台北市南港區西新里南港路三段47巷55號
+    const ROAD_XML='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_roadquery.xml'; // 停管處路邊格位即時檔(CORS *)
+    const BAYS_URL='bays.json';                   // 靜態格位座標(路段代碼+格位編號→經緯度),由 tools/gen_bays.py 產生
+    const POLL_MS=60000;                          // 檔案約每 5 分鐘更新;每分鐘用條件式請求檢查(未變更時瀏覽器回快取,不重抓)
+    const STALE_MIN=12;                           // 產生時間逾此分鐘數 → 示警
+    const TYPE_LABEL={'01':'一般','03':'身障','07':'卸貨','70':'卸貨','10':'時段','50':'機慢車','09':'其他'};
+    const STATUS_LABEL={'2':'空格','1':'有車','3':'設備異常','0':'設備異常'};
+
+    let bays=null, segsStatic=null, map=null, markers=new Map(), centerPt=null;
+    let lastLM=null, lastGen=null, status=new Map(), segLive={}, pollTimer=null, loading=false, showAll=false, lastLoadAt=0;
+
+    function dist(lat,lon){ return Math.hypot((lat-CENTER[0])*110540,(lon-CENTER[1])*111320*Math.cos(CENTER[0]*Math.PI/180)); }
+    // 「20261017T183513」/「2026-10-17 18:38:35」皆為台北時間(UTC+8),手動解析避免被當成本地/美中時區
+    function parseTpe(s){
+      if(!s) return null;
+      const m=String(s).match(/(\d{4})-?(\d{2})-?(\d{2})[T ](\d{2}):?(\d{2}):?(\d{2})?/);
+      if(!m) return null;
+      return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4]-8,+m[5],+(m[6]||0)));
+    }
+    const hhmm=d=>d?d.toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit',timeZone:'Asia/Taipei'}):'--:--';
+    const hhmmss=d=>d?d.toLocaleTimeString('zh-TW',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Taipei'}):'--:--:--';
+
+    /*PARSE-BEGIN*/
+    // 只切出需要的 <ROAD> 區塊,不用 DOMParser 解整個 7.6MB(實測 Node 11ms)
+    function tagText(s,name){ const i=s.indexOf('<'+name+'>'); if(i<0) return null; const j=s.indexOf('</'+name+'>',i); return j<0?null:s.slice(i+name.length+2,j); }
+    function parseRoadXml(xml,wanted){
+      const out={segs:{},cells:new Map(),genTime:null,nRoads:0};
+      let pos=0;
+      for(;;){
+        const a=xml.indexOf('<ROAD>',pos); if(a<0) break;
+        const b=xml.indexOf('</ROAD>',a); if(b<0) break;
+        pos=b+7; out.nRoads++;
+        const idIdx=xml.indexOf('<roadSegID>',a); if(idIdx<0||idIdx>b) continue;
+        const id=xml.slice(idIdx+11,xml.indexOf('</roadSegID>',idIdx));
+        if(!out.genTime){ const u=xml.indexOf('<roadSegUpdatetime>',a); if(u>0&&u<b) out.genTime=xml.slice(u+19,xml.indexOf('</roadSegUpdatetime>',u)); }
+        if(!wanted.has(id)) continue;
+        const block=xml.slice(a,b);
+        const seg={name:(tagText(block,'roadSegName')||'').replace(/^\S*\(\d+\)\s*/,'').trim(),fee:tagText(block,'roadSegFee'),t0:tagText(block,'roadSegtimeStart'),t1:tagText(block,'roadSegtimeEnd'),total:+(tagText(block,'roadSegTotalValue')||0),cells:0,vac:0,fault:0,maxDt:null};
+        let cp=0;
+        for(;;){
+          const c=block.indexOf('<cell>',cp); if(c<0) break;
+          const d=block.indexOf('</cell>',c); if(d<0) break; cp=d+7;
+          const cb=block.slice(c,d);
+          const st=tagText(cb,'cellStatus'), ps=tagText(cb,'psId'), dt=tagText(cb,'data_Dt');
+          out.cells.set(id+'|'+ps,[st,dt]); seg.cells++;
+          if(st==='2') seg.vac++; else if(st==='3'||st==='0') seg.fault++;
+          if(dt&&(!seg.maxDt||dt>seg.maxDt)) seg.maxDt=dt;
+        }
+        out.segs[id]=seg;
+      }
+      return out;
+    }
+    /*PARSE-END*/
+
+    // ---- 地圖 ----
+    function markerRadius(z){ return z>=19?8:z>=18?6.5:z>=17?5:z>=16?3.5:2.5; }
+    function styleFor(b){
+      const s=status.get(b[0]+'|'+b[1]); const st=s?s[0]:null; const special=b[4]!=='01';
+      const base={weight:special?1.5:1,dashArray:special?'3 2':null,color:special?'#8a78ff':'#0b1424',opacity:.95};
+      if(st==='2') return {...base,fillColor:'#43e59b',fillOpacity:.95,color:special?'#8a78ff':'#1a7a52'};
+      if(st==='1') return {...base,fillColor:'#ff6b78',fillOpacity:.45,color:special?'#8a78ff':'rgba(255,107,120,.5)'};
+      if(st==='3'||st==='0') return {...base,fillColor:'#ffc857',fillOpacity:.9,color:special?'#8a78ff':'#8a6a1c'};
+      return {...base,fillColor:'#000',fillOpacity:0,color:special?'#8a78ff':'#6f7d99'};
+    }
+    function tipFor(b){
+      const s=status.get(b[0]+'|'+b[1]); const seg=segLive[b[0]]||{}; const name=seg.name||(segsStatic&&segsStatic[b[0]])||b[0];
+      const st=s?(STATUS_LABEL[s[0]]||('狀態 '+s[0])):'無感測';
+      const dt=s&&s[1]?('　更新 '+hhmm(parseTpe(s[1]))):'';
+      const fee=seg.fee?('<br>'+seg.fee+(seg.t0?(' · '+seg.t0+'–'+seg.t1):'')):'';
+      return `<b>${name}</b> #${b[1]}<br>${TYPE_LABEL[b[4]]||'其他'}格 · <b>${st}</b>${dt}${fee}<br>距中心 ${Math.round(dist(b[2],b[3]))} m`;
+    }
+    function initMap(){
+      if(map||!window.L||!bays) return false;
+      map=L.map('map',{preferCanvas:true,zoomControl:true,attributionControl:true}).setView(CENTER,17);
+      let errs=0, swapped=false;
+      const nlsc=L.tileLayer('https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'© 內政部國土測繪中心'}).addTo(map);
+      nlsc.on('tileerror',()=>{ if(swapped||++errs<4) return; swapped=true; map.removeLayer(nlsc);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map); });
+      L.circle(CENTER,{radius:300,color:'#65a6ff',weight:1,opacity:.35,fillOpacity:.04,interactive:false}).addTo(map);
+      centerPt=L.circleMarker(CENTER,{radius:7,color:'#fff',weight:2,fillColor:'#65a6ff',fillOpacity:1}).addTo(map)
+        .bindTooltip('南港路三段47巷55號',{permanent:true,direction:'top',offset:[0,-8],className:'center-label'});
+      const r=markerRadius(17);
+      for(const b of bays.bays){
+        const m=L.circleMarker([b[2],b[3]],{radius:r,...styleFor(b)}).addTo(map);
+        m.bindTooltip(()=>tipFor(b),{direction:'top',offset:[0,-6],sticky:false});
+        markers.set(b[0]+'|'+b[1],m);
+      }
+      map.on('zoomend',()=>{ const rr=markerRadius(map.getZoom()); markers.forEach(m=>m.setRadius(rr)); });
+      setTimeout(()=>map.invalidateSize(),50);
+      return true;
+    }
+    function recenter(){ if(map) map.flyTo(CENTER,17,{duration:.6}); }
+    function restyleMarkers(){ if(!map) return; for(const b of bays.bays){ const m=markers.get(b[0]+'|'+b[1]); if(m) m.setStyle(styleFor(b)); } }
+
+    // ---- 顯示 ----
+    function setPill(mode,text){ const p=document.getElementById('pill'); p.className='live-pill'+(mode?' '+mode:''); p.textContent=text; }
+    function render(){
+      let vac=0,vacGen=0,known=0;
+      for(const b of bays.bays){ const s=status.get(b[0]+'|'+b[1]); if(!s) continue; known++; if(s[0]==='2'){ vac++; if(b[4]==='01'||b[4]==='10') vacGen++; } }
+      const v=document.getElementById('vacant'); v.textContent=vac; v.classList.toggle('zero',vac===0);
+      document.getElementById('vacantGeneral').textContent=vacGen;
+      document.getElementById('known').textContent=known;
+      // 路段清單
+      const rows=[];
+      const bySeg={};
+      for(const b of bays.bays){ (bySeg[b[0]]=bySeg[b[0]]||{bays:[],min:1e9}); bySeg[b[0]].bays.push(b); const d=dist(b[2],b[3]); if(d<bySeg[b[0]].min) bySeg[b[0]].min=d; }
+      for(const id in bySeg){
+        const g=bySeg[id]; const live=segLive[id]; let vacS=0,knownS=0;
+        for(const b of g.bays){ const s=status.get(id+'|'+b[1]); if(!s) continue; knownS++; if(s[0]==='2') vacS++; }
+        rows.push({id,name:(live&&live.name)||segsStatic[id]||id,min:g.min,n:g.bays.length,known:knownS,vac:vacS,fee:live&&live.fee,t0:live&&live.t0,t1:live&&live.t1,lat:g.bays[0][2],lon:g.bays[0][3]});
+      }
+      rows.sort((a,b)=>a.min-b.min);
+      const LIMIT=12; const shown=showAll?rows:rows.slice(0,LIMIT);
+      const list=document.getElementById('segList'); list.innerHTML='';
+      for(const r of shown){
+        const el=document.createElement('div'); el.className='seg'; el.setAttribute('role','button'); el.tabIndex=0;
+        const cnt=r.known?`<b class="${r.vac?'':'zero'}">${r.vac}</b><small>空 / ${r.known} 格有感測</small>`:`<b class="na">無感測</b><small>${r.n} 格</small>`;
+        const meta=[r.fee?(r.fee+(r.t0?(' '+r.t0+'–'+r.t1):'')):null,Math.round(r.min)+' m',r.n!==r.known?('共 '+r.n+' 格'):null].filter(Boolean).join(' · ');
+        el.innerHTML=`<div class="seg-main"><div class="seg-name">${r.name}</div><div class="seg-sub">${meta}</div></div><div class="seg-cnt">${cnt}</div>`;
+        const go=()=>{ if(map) map.flyTo([r.lat,r.lon],18,{duration:.6}); window.scrollTo({top:0,behavior:'smooth'}); };
+        el.onclick=go; el.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } };
+        list.appendChild(el);
+      }
+      const more=document.getElementById('moreBtn'); more.hidden=rows.length<=LIMIT; more.textContent=showAll?'只顯示最近 12 段':`顯示更多路段（共 ${rows.length} 段）`;
+      document.getElementById('segHint').textContent=`由近到遠 · ${rows.length} 段`;
+      restyleMarkers();
+    }
+    function toggleMore(){ showAll=!showAll; render(); }
+    function setTs(gen,lm,fromCache){
+      const t=gen||lm; const el=document.getElementById('ts');
+      if(!t){ el.textContent='無法判讀資料時間'; el.classList.add('stale'); setPill('stale','資料延遲'); return; }
+      const ageMin=Math.max(0,Math.round((Date.now()-t.getTime())/60000));
+      const stale=ageMin>STALE_MIN;
+      el.innerHTML=`資料時間：${hhmmss(t)}（${ageMin} 分鐘前${gen?'，停管處產檔時間':'，檔案時間'}）`+(stale?`<br><span class="warn">官方資料已逾 ${ageMin} 分鐘未更新，格位狀態可能不準</span>`:'');
+      el.classList.toggle('stale',stale);
+      setPill(stale?'stale':'',stale?'資料延遲':'即時資訊');
+    }
+
+    // ---- 載入 ----
+    async function loadBays(){
+      const r=await fetch(BAYS_URL,{cache:'no-cache'}); if(!r.ok) throw new Error('bays.json HTTP '+r.status);
+      bays=await r.json(); segsStatic=bays.segs||{};
+    }
+    async function load(quiet){
+      if(loading) return; loading=true; lastLoadAt=Date.now();
+      const btn=document.getElementById('refresh'); const err=document.getElementById('err');
+      if(!quiet){ btn.disabled=true; btn.textContent='更新中…'; }
+      try{
+        const r=await fetch(ROAD_XML,{cache:'no-cache'}); // 瀏覽器自動帶 If-Modified-Since/If-None-Match;未變更回快取
+        if(!r.ok) throw new Error('TCMSV HTTP '+r.status);
+        const lm=r.headers.get('Last-Modified');
+        if(lm&&lm===lastLM&&status.size){ setTs(lastGen,lm?new Date(lm):null); err.textContent=''; return; } // 未變更:只更新「幾分鐘前」
+        const xml=await r.text();
+        const parsed=parseRoadXml(xml,new Set(Object.keys(segsStatic)));
+        if(!parsed.nRoads) throw new Error('XML 內容異常(無 ROAD)');
+        status=parsed.cells; segLive=parsed.segs; lastLM=lm; lastGen=parseTpe(parsed.genTime);
+        render(); setTs(lastGen,lm?new Date(lm):null); err.textContent='';
+      }catch(e){
+        err.textContent='讀取停管處即時資料失敗：'+(e&&e.message?e.message:e)+(status.size?'（顯示上次成功的資料）':'');
+        if(!status.size) setPill('err','無法連線');
+      }finally{
+        loading=false; if(!quiet){ btn.disabled=false; btn.textContent='↻ 重新整理'; }
+      }
+    }
+    function schedule(){
+      if(pollTimer) clearInterval(pollTimer);
+      pollTimer=setInterval(()=>{ if(document.visibilityState==='visible') load(true); else if(lastGen) setTs(lastGen,lastLM?new Date(lastLM):null); },POLL_MS);
+      document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&Date.now()-lastLoadAt>POLL_MS/2) load(true); });
+    }
+    async function startApp(){
+      try{ await loadBays(); }
+      catch(e){ document.getElementById('err').textContent='格位座標檔載入失敗：'+e.message; setPill('err','無法載入'); return; }
+      // Leaflet 可能被網路擋住:等最多 4 秒,否則降級只顯示數字與清單
+      let waited=0; while(!window.L&&waited<4000){ await new Promise(r=>setTimeout(r,200)); waited+=200; }
+      if(!initMap()){ document.getElementById('mapNote').hidden=false; document.getElementById('map').style.display='none'; }
+      await load(true); schedule();
+    }
+    restoreAccess();
+  </script>
+</body>
+</html>
