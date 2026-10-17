@@ -1,1 +1,1 @@
-{"source": "itaipeiparking", "updated": "2026-10-17 16:53", "live": true, "good": 5, "total": 6, "carTotal": 293, "carAvail": 47, "motorTotal": 28, "motorAvail": 6, "hcAvail": 1, "pgAvail": 0, "hmAvail": -9, "nearby": {"TPE1259": 1, "TPE1810": 69}, "builtAt": "2026-10-17 16:53:36"}
+{"source": "itaipeiparking", "updated": "2026-10-17 20:33", "live": true, "good": 4, "total": 6, "carTotal": 293, "carAvail": 67, "motorTotal": 28, "motorAvail": 6, "hcAvail": 0, "pgAvail": 1, "hmAvail": -9, "nearby": {"TPE1259": 6, "TPE1810": 121}, "builtAt": "2026-10-17 20:33:35"}
