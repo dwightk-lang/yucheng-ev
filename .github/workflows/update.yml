@@ -21,7 +21,7 @@ jobs:
           import urllib.request, http.cookiejar, ssl, json, re, datetime, sys
           TPE='TPE0722'; NEARBY=['TPE1259','TPE1810']; LON,LAT='121.59294','25.05329'
           BASE='https://itaipeiparking.pma.gov.taipei'
-          TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json'
+          TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.xml'  # JSON 版自 2026-10-19 凍結,改讀 XML 版
           TZ=datetime.timezone(datetime.timedelta(hours=8))
           ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
           UA='Mozilla/5.0 (compatible; yucheng-ev/1.0)'
@@ -53,17 +53,21 @@ jobs:
                 'nearby':{i:(_int(by[i].get('carRemainderNum')) if i in by else None) for i in NEARBY},
                 'builtAt':datetime.datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')}
           def fetch_tcmsv():
-              j=json.loads(urllib.request.urlopen(urllib.request.Request(TCMSV,headers={'User-Agent':UA}),timeout=40,context=ctx).read().decode('utf-8','ignore'))
-              by={x.get('id'):x for x in j['data']['park']}; p=by.get(TPE)
-              lst=((p.get('ChargeStation') or {}).get('scoketStatusList')) or []
-              good=sum(1 for s in lst if s.get('spot_status')=='待機中')
-              ut=j['data'].get('UPDATETIME',''); mm=re.search(r'(\w{3}) +(\d+) (\d+):(\d+):\d+ \w+ (\d+)',ut)
+              # 2026-11-09 起改讀 XML 版:TCMSV_allavailable.json 自 10-19 凍結未更新,XML 版仍每分鐘更新(欄位 1:1,PARK 子欄位大寫)
+              import xml.etree.ElementTree as ET
+              root=ET.fromstring(urllib.request.urlopen(urllib.request.Request(TCMSV,headers={'User-Agent':UA}),timeout=40,context=ctx).read())
+              by={q.findtext('ID'):q for q in root.findall('PARK')}; p=by.get(TPE)
+              if p is None: raise RuntimeError('TCMSV no '+TPE)
+              lst=[(e.text or '').strip() for e in p.findall('ChargeStation/scoketStatusList/spot_status')]
+              good=sum(1 for s in lst if s=='待機中')
+              ut=(root.findtext('UPDATETIME') or '').strip(); mm=re.search(r'(\w{3}) +(\d+) (\d+):(\d+):\d+ \w+ (\d+)',ut)
               mon={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
               upd=(f'{mm.group(5)}-{mon[mm.group(1)]:02d}-{int(mm.group(2)):02d} {mm.group(3)}:{mm.group(4)}' if mm else ut)
+              g=lambda q,tag:(_int((q.findtext(tag) or '').strip()) if q is not None else None)
               return {'source':'TCMSV','updated':upd,'live':len(lst)>0,'good':good,'total':len(lst) or 6,
-                'carTotal':293,'carAvail':p.get('availablecar'),'motorTotal':28,'motorAvail':p.get('availablemotor'),
-                'hcAvail':p.get('availablehandicap'),'pgAvail':p.get('availablepregnancy'),'hmAvail':p.get('availableheavymotor'),
-                'nearby':{i:(by[i].get('availablecar') if i in by else None) for i in NEARBY},
+                'carTotal':293,'carAvail':g(p,'AVAILABLECAR'),'motorTotal':28,'motorAvail':g(p,'AVAILABLEMOTOR'),
+                'hcAvail':g(p,'AVAILABLEHANDICAP'),'pgAvail':g(p,'AVAILABLEPREGNANCY'),'hmAvail':g(p,'AVAILABLEHEAVYMOTOR'),
+                'nearby':{i:g(by.get(i),'AVAILABLECAR') for i in NEARBY},
                 'builtAt':datetime.datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')}
           try:
               data=fetch_itp()

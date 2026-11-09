@@ -1025,7 +1025,7 @@
     }
 
     // 充電樁 + 車位皆來自台北市停管處 TCMSV 官方 feed(= itaipeiparking.pma.gov.taipei 同源,CORS 全開可瀏覽器直連)
-    const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.json';
+    const TCMSV='https://tcgbusfs.blob.core.windows.net/blobtcmsv/TCMSV_allavailable.xml'; // JSON 版自 2026-10-19 凍結未更新,改讀 XML 版(每分鐘更新)
     const CAR_ID='TPE0722';
     let carTotal=293,motorTotal=28; // TCMSV alldesc 靜態值,status.json 有值時覆寫
     const HC_TOTAL=8,PG_TOTAL=5,HM_TOTAL=6; // 身障/孕婦親子/大型重機 總數(alldesc summary)
@@ -1041,6 +1041,25 @@
       const mon={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[m[1]];
       if(mon==null)return null;
       return new Date(Date.UTC(+m[6],mon,+m[2],+m[3],+m[4],+m[5])-8*3600*1000);
+    }
+    // 2026-11-09:把 TCMSV_allavailable.xml 轉成與舊 JSON 相同的形狀
+    // {data:{UPDATETIME,park:[{id,availablecar,…,ChargeStation:{scoketStatusList:[{spot_status}]}}]}},只取本頁需要的場站,candFromTcmsv 不必改。
+    // XML 的 PARK 子欄位是大寫(<ID>/<AVAILABLECAR>…),ChargeStation/scoketStatusList/spot_status 與 JSON 同名;數值轉成 number(-9=無資料)。
+    function parseTcmsvXml(text){
+      text=text||'';
+      const ut=/<UPDATETIME>([^<]*)<\/UPDATETIME>/.exec(text);
+      const num=(blk,tag)=>{const m=new RegExp('<'+tag+'>\\s*(-?\\d+)\\s*</'+tag+'>').exec(blk);return m?+m[1]:null;};
+      const park=[];
+      [CAR_ID].concat(Object.keys(NEARBY)).forEach(id=>{
+        const i=text.indexOf('<ID>'+id+'</ID>');if(i<0)return;
+        const blk=text.slice(text.lastIndexOf('<PARK>',i),text.indexOf('</PARK>',i));
+        const list=[];const re=/<spot_status>([^<]*)<\/spot_status>/g;let m;
+        while((m=re.exec(blk)))list.push({spot_status:m[1].trim()});
+        park.push({id:id,availablecar:num(blk,'AVAILABLECAR'),availablemotor:num(blk,'AVAILABLEMOTOR'),
+          availablehandicap:num(blk,'AVAILABLEHANDICAP'),availablepregnancy:num(blk,'AVAILABLEPREGNANCY'),
+          availableheavymotor:num(blk,'AVAILABLEHEAVYMOTOR'),ChargeStation:{scoketStatusList:list}});
+      });
+      return {data:{UPDATETIME:ut?ut[1].trim():'',park:park}};
     }
     // 解析 itaipeiparking 的 updateTime:「2026-10-15 10:24」(台北 UTC+8)
     function parseItpTime(str){
@@ -1117,7 +1136,7 @@
      try{
       const [sv,tc]=await Promise.allSettled([
         fetch('status.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.json()),
-        fetch(TCMSV,{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject(new Error('http '+r.status)))
+        fetch(TCMSV,{cache:'no-store'}).then(r=>r.ok?r.text().then(parseTcmsvXml):Promise.reject(new Error('http '+r.status)))
       ]);
       const cands=[];
       if(sv.status==='fulfilled'){const c=candFromStatus(sv.value);if(c)cands.push(c);}
