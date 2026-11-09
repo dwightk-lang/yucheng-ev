@@ -1032,7 +1032,7 @@
     // 附近停車場 (TCMSV id: 汽車位總數)
     // 南港高中TPE0596(月租/季票制無閘門)、國建TPE1780 無即時feed,已移除
     const NEARBY={TPE1259:10,TPE1810:247};
-    const STALE_MIN=6; // 官方資料逾此分鐘數未更新 → 畫面示警(feed 正常約每分鐘更新)
+    const STALE_MIN=8; // 官方資料逾此分鐘數未更新 → 畫面示警。11-09 由 6 調為 8:TCMSV XML 每 5 分鐘一批(UPDATETIME 整 5 分)+約 1.5 分鐘發布延遲,正常最大資料年齡≈6.5 分,門檻 6 會在每批尾端誤報約 50 秒
     // 解析 TCMSV 的 UPDATETIME:「Thu Oct 15 08:42:00 CST 2026」,此處 CST=台北 UTC+8
     //（JS 直接 new Date() 會把 CST 當成美國中部時區,誤差 14 小時,故手動解析）
     function parseTcmsvTime(str){
